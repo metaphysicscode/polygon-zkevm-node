@@ -519,6 +519,32 @@ func (etherMan *Client) sequenceBatches(opts bind.TransactOpts, sequences []ethm
 	return tx, err
 }
 
+// BuildSubmitProofHashTxData builds a []bytes to be sent to the PoE SC method SubmitProofHashTxData.
+func (etherMan *Client) BuildSubmitProofHashTxData(lastVerifiedBatch, newVerifiedBatch uint64, proofHash []byte) (to *common.Address, data []byte, err error) {
+	opts, err := etherMan.generateRandomAuth()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build submit proof hash, err: %w", err)
+	}
+	opts.NoSend = true
+	// force nonce, gas limit and gas price to avoid querying it from the chain
+	opts.Nonce = big.NewInt(1)
+	opts.GasLimit = uint64(1)
+	opts.GasPrice = big.NewInt(1)
+
+	var proofHashFormatted [32]byte
+	copy(proofHashFormatted[:], proofHash)
+
+	tx, err := etherMan.PoE.SubmitProofHash(&opts, lastVerifiedBatch, newVerifiedBatch, proofHashFormatted)
+	if err != nil {
+		if parsedErr, ok := tryParseError(err); ok {
+			err = parsedErr
+		}
+		return nil, nil, err
+	}
+
+	return tx.To(), tx.Data(), nil
+}
+
 // BuildTrustedVerifyBatchesTxData builds a []bytes to be sent to the PoE SC method TrustedVerifyBatches.
 func (etherMan *Client) BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVerifiedBatch uint64, inputs *ethmanTypes.FinalProofInputs) (to *common.Address, data []byte, err error) {
 	opts, err := etherMan.generateRandomAuth()

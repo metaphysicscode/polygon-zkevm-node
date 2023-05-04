@@ -1909,6 +1909,27 @@ func (_Polygonzkevm *PolygonzkevmTransactorSession) TransferOwnership(newOwner c
 	return _Polygonzkevm.Contract.TransferOwnership(&_Polygonzkevm.TransactOpts, newOwner)
 }
 
+// SubmitProofHash is a paid mutator transaction binding the contract method 0x1806a037.
+//
+// Solidity: function submitProofHash(uint64 initNumBatch, uint64 finalNewBatch, bytes32 _proofHash) returns()
+func (_Polygonzkevm *PolygonzkevmTransactor) SubmitProofHash(opts *bind.TransactOpts, initNumBatch uint64, finalNewBatch uint64, _proofHash [32]byte) (*types.Transaction, error) {
+	return _Polygonzkevm.contract.Transact(opts, "submitProofHash", initNumBatch, finalNewBatch, _proofHash)
+}
+
+// SubmitProofHash is a paid mutator transaction binding the contract method 0x1806a037.
+//
+// Solidity: function submitProofHash(uint64 initNumBatch, uint64 finalNewBatch, bytes32 _proofHash) returns()
+func (_Polygonzkevm *PolygonzkevmSession) SubmitProofHash(initNumBatch uint64, finalNewBatch uint64, _proofHash [32]byte) (*types.Transaction, error) {
+	return _Polygonzkevm.Contract.SubmitProofHash(&_Polygonzkevm.TransactOpts, initNumBatch, finalNewBatch, _proofHash)
+}
+
+// SubmitProofHash is a paid mutator transaction binding the contract method 0x1806a037.
+//
+// Solidity: function submitProofHash(uint64 initNumBatch, uint64 finalNewBatch, bytes32 _proofHash) returns()
+func (_Polygonzkevm *PolygonzkevmTransactorSession) SubmitProofHash(initNumBatch uint64, finalNewBatch uint64, _proofHash [32]byte) (*types.Transaction, error) {
+	return _Polygonzkevm.Contract.SubmitProofHash(&_Polygonzkevm.TransactOpts, initNumBatch, finalNewBatch, _proofHash)
+}
+
 // VerifyBatches is a paid mutator transaction binding the contract method 0x4fd70464.
 //
 // Solidity: function verifyBatches(uint64 pendingStateNum, uint64 initNumBatch, uint64 finalNewBatch, bytes32 newLocalExitRoot, bytes32 newStateRoot, bytes proof) returns()
@@ -5301,6 +5322,173 @@ func (_Polygonzkevm *PolygonzkevmFilterer) WatchVerifyBatchesTrustedAggregator(o
 func (_Polygonzkevm *PolygonzkevmFilterer) ParseVerifyBatchesTrustedAggregator(log types.Log) (*PolygonzkevmVerifyBatchesTrustedAggregator, error) {
 	event := new(PolygonzkevmVerifyBatchesTrustedAggregator)
 	if err := _Polygonzkevm.contract.UnpackLog(event, "VerifyBatchesTrustedAggregator", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// PolygonzkevmSubmitProofHashIterator is returned from FilterSubmitProofHash and is used to iterate over the raw logs and unpacked data for SubmitProofHash events raised by the Polygonzkevm contract.
+type PolygonzkevmSubmitProofHashIterator struct {
+	Event *PolygonzkevmSubmitProofHash // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *PolygonzkevmSubmitProofHashIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(PolygonzkevmSubmitProofHash)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(PolygonzkevmSubmitProofHash)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *PolygonzkevmSubmitProofHashIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *PolygonzkevmSubmitProofHashIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// PolygonzkevmSubmitProofHash represents a SubmitProofHash event raised by the Polygonzkevm contract.
+type PolygonzkevmSubmitProofHash struct {
+	Prover        common.Address
+	InitNumBatch  uint64
+	FinalNewBatch uint64
+	ProofHash     [32]byte
+	Raw           types.Log // Blockchain specific contextual infos
+}
+
+// FilterSubmitProofHash is a free log retrieval operation binding the contract event 0x35251d2379f5b4a4ba790ceb9dcf7687eac1fc273a938c2774d4879e6a6b0a8e.
+//
+// Solidity: event SubmitProofHash(address _prover, uint64 initNumBatch, uint64 finalNewBatch, bytes32 _proofHash)
+func (_Polygonzkevm *PolygonzkevmFilterer) FilterSubmitProofHash(opts *bind.FilterOpts, prover []common.Address, initNumBatch []uint64, finalNewBatch []uint64) (*PolygonzkevmSubmitProofHashIterator, error) {
+
+	var proverRule []interface{}
+	for _, proverItem := range prover {
+		proverRule = append(proverRule, proverItem)
+	}
+
+	var initNumBatchRule []interface{}
+	for _, initNumBatchItem := range initNumBatch {
+		initNumBatchRule = append(initNumBatchRule, initNumBatchItem)
+	}
+
+	var finalNewBatchRule []interface{}
+	for _, finalNewBatchItem := range finalNewBatch {
+		finalNewBatchRule = append(finalNewBatchRule, finalNewBatchItem)
+	}
+
+	logs, sub, err := _Polygonzkevm.contract.FilterLogs(opts, "SubmitProofHash", proverRule, initNumBatchRule, finalNewBatchRule)
+	if err != nil {
+		return nil, err
+	}
+	return &PolygonzkevmSubmitProofHashIterator{contract: _Polygonzkevm.contract, event: "SubmitProofHash", logs: logs, sub: sub}, nil
+}
+
+// WatchSubmitProofHash is a free log subscription operation binding the contract event 0x35251d2379f5b4a4ba790ceb9dcf7687eac1fc273a938c2774d4879e6a6b0a8e.
+//
+// Solidity: event SubmitProofHash(address _prover, uint64 initNumBatch, uint64 finalNewBatch, bytes32 _proofHash)
+func (_Polygonzkevm *PolygonzkevmFilterer) WatchSubmitProofHash(opts *bind.WatchOpts, sink chan<- *PolygonzkevmSubmitProofHash, prover []common.Address, initNumBatch []uint64, finalNewBatch []uint64) (event.Subscription, error) {
+
+	var proverRule []interface{}
+	for _, proverItem := range prover {
+		proverRule = append(proverRule, proverItem)
+	}
+
+	var initNumBatchRule []interface{}
+	for _, initNumBatchItem := range initNumBatch {
+		initNumBatchRule = append(initNumBatchRule, initNumBatchItem)
+	}
+
+	var finalNewBatchRule []interface{}
+	for _, finalNewBatchItem := range finalNewBatch {
+		finalNewBatchRule = append(finalNewBatchRule, finalNewBatchItem)
+	}
+
+	logs, sub, err := _Polygonzkevm.contract.WatchLogs(opts, "SubmitProofHash", proverRule, initNumBatchRule, finalNewBatchRule)
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(PolygonzkevmSubmitProofHash)
+				if err := _Polygonzkevm.contract.UnpackLog(event, "SubmitProofHash", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseVerifyBatchesTrustedAggregator is a free log subscription operation binding the contract event 0x35251d2379f5b4a4ba790ceb9dcf7687eac1fc273a938c2774d4879e6a6b0a8e.
+//
+// Solidity: event SubmitProofHash(address _prover, uint64 initNumBatch, uint64 finalNewBatch, bytes32 _proofHash)
+func (_Polygonzkevm *PolygonzkevmFilterer) ParseSubmitProofHash(log types.Log) (*PolygonzkevmSubmitProofHash, error) {
+	event := new(PolygonzkevmSubmitProofHash)
+	if err := _Polygonzkevm.contract.UnpackLog(event, "SubmitProofHash", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log
