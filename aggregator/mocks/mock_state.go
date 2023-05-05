@@ -172,6 +172,31 @@ func (_m *StateMock) GetBatchByNumber(ctx context.Context, batchNumber uint64, d
 	return r0, r1
 }
 
+func (_m *StateMock) GetEarlyProofHashByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error) {
+	ret := _m.Called(ctx, batchNumber, dbTx)
+
+	var r0 uint64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, uint64, pgx.Tx) (uint64, error)); ok {
+		return rf(ctx, batchNumber, dbTx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uint64, pgx.Tx) uint64); ok {
+		r0 = rf(ctx, batchNumber, dbTx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(uint64)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uint64, pgx.Tx) error); ok {
+		r1 = rf(ctx, batchNumber, dbTx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetLastVerifiedBatch provides a mock function with given fields: ctx, dbTx
 func (_m *StateMock) GetLastVerifiedBatch(ctx context.Context, dbTx pgx.Tx) (*state.VerifiedBatch, error) {
 	ret := _m.Called(ctx, dbTx)
@@ -224,6 +249,31 @@ func (_m *StateMock) GetProofReadyToVerify(ctx context.Context, lastVerfiedBatch
 	return r0, r1
 }
 
+func (_m *StateMock)GetLastBlock(ctx context.Context, dbTx pgx.Tx) (*state.Block, error) {
+	ret := _m.Called(ctx, dbTx)
+
+	var r0 *state.Block
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, pgx.Tx) (*state.Block, error)); ok {
+		return rf(ctx, dbTx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, pgx.Tx) *state.Block); ok {
+		r0 = rf(ctx, dbTx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*state.Block)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, pgx.Tx) error); ok {
+		r1 = rf(ctx, dbTx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetProofsToAggregate provides a mock function with given fields: ctx, dbTx
 func (_m *StateMock) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx) (*state.Proof, *state.Proof, error) {
 	ret := _m.Called(ctx, dbTx)
@@ -257,6 +307,58 @@ func (_m *StateMock) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx) (*st
 	}
 
 	return r0, r1, r2
+}
+
+func (_m *StateMock) GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error) {
+	ret := _m.Called(ctx, dbTx)
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, pgx.Tx) (string, error)); ok {
+		return rf(ctx, dbTx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, pgx.Tx) string); ok {
+		r0 = rf(ctx, dbTx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(string)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, pgx.Tx) error); ok {
+		r1 = rf(ctx, dbTx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+func (_m *StateMock) AddProverProof(ctx context.Context, proverProof *state.ProverProof, dbTx pgx.Tx) error {
+	return nil
+}
+
+func (_m *StateMock) GetProverProofByHash(ctx context.Context, hash string, dbTx pgx.Tx) (*state.ProverProof, error) {
+	ret := _m.Called(ctx, dbTx)
+
+	var r0 *state.ProverProof
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, pgx.Tx) (*state.ProverProof, error)); ok {
+		return rf(ctx, dbTx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, pgx.Tx) *state.ProverProof); ok {
+		r0 = rf(ctx, dbTx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*state.ProverProof)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, pgx.Tx) error); ok {
+		r1 = rf(ctx, dbTx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // GetVirtualBatchToProve provides a mock function with given fields: ctx, lastVerfiedBatchNumber, dbTx

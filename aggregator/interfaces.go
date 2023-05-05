@@ -39,6 +39,7 @@ type ethTxManager interface {
 type etherman interface {
 	GetLatestVerifiedBatchNum() (uint64, error)
 	BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVerifiedBatch uint64, inputs *ethmanTypes.FinalProofInputs) (to *common.Address, data []byte, err error)
+	BuildProofHashTxData(lastVerifiedBatch, newVerifiedBatch uint64, proofHash common.Hash) (to *common.Address, data []byte, err error)
 }
 
 // aggregatorTxProfitabilityChecker interface for different profitability
@@ -62,4 +63,9 @@ type stateInterface interface {
 	DeleteUngeneratedProofs(ctx context.Context, dbTx pgx.Tx) error
 	CleanupGeneratedProofs(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) error
 	CleanupLockedProofs(ctx context.Context, duration string, dbTx pgx.Tx) (int64, error)
+	GetEarlyProofHashByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error)
+	GetLastBlock(ctx context.Context, dbTx pgx.Tx) (*state.Block, error)
+	GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error)
+	GetProverProofByHash(ctx context.Context, hash string, dbTx pgx.Tx) (*state.ProverProof, error)
+	AddProverProof(ctx context.Context, proverProof *state.ProverProof, dbTx pgx.Tx) error
 }

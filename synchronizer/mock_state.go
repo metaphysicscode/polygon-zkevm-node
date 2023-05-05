@@ -121,6 +121,19 @@ func (_m *stateMock) AddVerifiedBatch(ctx context.Context, verifiedBatch *state.
 	return r0
 }
 
+func (_m *stateMock) AddProofHash(ctx context.Context, proofHash *state.ProofHash, dbTx pgx.Tx) error {
+	ret := _m.Called(ctx, proofHash, dbTx)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *state.ProofHash, pgx.Tx) error); ok {
+		r0 = rf(ctx, proofHash, dbTx)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // AddVirtualBatch provides a mock function with given fields: ctx, virtualBatch, dbTx
 func (_m *stateMock) AddVirtualBatch(ctx context.Context, virtualBatch *state.VirtualBatch, dbTx pgx.Tx) error {
 	ret := _m.Called(ctx, virtualBatch, dbTx)

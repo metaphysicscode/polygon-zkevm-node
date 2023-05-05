@@ -14,6 +14,40 @@ type Etherman struct {
 	mock.Mock
 }
 
+func (_m *Etherman)BuildProofHashTxData(lastVerifiedBatch, newVerifiedBatch uint64, proofHash common.Hash) (to *common.Address, data []byte, err error) {
+	ret := _m.Called(lastVerifiedBatch, newVerifiedBatch, proofHash)
+
+	var r0 *common.Address
+	var r1 []byte
+	var r2 error
+	if rf, ok := ret.Get(0).(func(uint64, uint64, common.Hash) (*common.Address, []byte, error)); ok {
+		return rf(lastVerifiedBatch, newVerifiedBatch, proofHash)
+	}
+	if rf, ok := ret.Get(0).(func(uint64, uint64, common.Hash) *common.Address); ok {
+		r0 = rf(lastVerifiedBatch, newVerifiedBatch, proofHash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*common.Address)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(uint64, uint64, common.Hash) []byte); ok {
+		r1 = rf(lastVerifiedBatch, newVerifiedBatch, proofHash)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]byte)
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(uint64, uint64, common.Hash) error); ok {
+		r2 = rf(lastVerifiedBatch, newVerifiedBatch, proofHash)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
 // BuildTrustedVerifyBatchesTxData provides a mock function with given fields: lastVerifiedBatch, newVerifiedBatch, inputs
 func (_m *Etherman) BuildTrustedVerifyBatchesTxData(lastVerifiedBatch uint64, newVerifiedBatch uint64, inputs *types.FinalProofInputs) (*common.Address, []byte, error) {
 	ret := _m.Called(lastVerifiedBatch, newVerifiedBatch, inputs)

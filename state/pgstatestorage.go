@@ -614,6 +614,22 @@ func (p *PostgresStorage) GetBatchByNumber(ctx context.Context, batchNumber uint
 	return &batch, nil
 }
 
+func (p *PostgresStorage) GetEarlyProofHashByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error) {
+	var blockNumber uint64
+	const getBatchByNumberSQL = `SELECT min(block_num) as block_num FROM state.proof_hash WHERE batch_num = $1`
+
+	e := p.getExecQuerier(dbTx)
+	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber).Scan(&blockNumber)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	} else if err != nil {
+		return 0, err
+	}
+
+	return blockNumber, nil
+}
+
 // GetBatchByTxHash returns the batch including the given tx
 func (p *PostgresStorage) GetBatchByTxHash(ctx context.Context, transactionHash common.Hash, dbTx pgx.Tx) (*Batch, error) {
 	const getBatchByTxHashSQL = `
@@ -2346,6 +2362,55 @@ func (p *PostgresStorage) GetBatchByForcedBatchNum(ctx context.Context, forcedBa
 func (p *PostgresStorage) AddProofHash(ctx context.Context, proofHash *ProofHash, dbTx pgx.Tx) error {
 	e := p.getExecQuerier(dbTx)
 	const addProofHashSQL = "INSERT INTO state.proof_hash (block_num, sender, init_num_batch, final_new_batch, proof_hash) VALUES ($1, $2, $3, $4, $5)"
-	_, err := e.Exec(ctx, addProofHashSQL, proofHash.BlockNumber, proofHash.Sender, proofHash.InitNumBatch, proofHash.FinalNewBatch, proofHash.ProofHash.String())
+	_, err := e.Exec(ctx, addProofHashSQL, proofHash.BlockNumber, proofHash.Sender.String(), proofHash.InitNumBatch, proofHash.FinalNewBatch, proofHash.ProofHash.String())
 	return err
+}
+
+func (p *PostgresStorage) AddProverProof(ctx context.Context, proverProof *ProverProof, dbTx pgx.Tx) error {
+	e := p.getExecQuerier(dbTx)
+	const addProofHashSQL = "INSERT INTO state.prover_proof (init_num_batch, final_new_batch, local_exit_root, new_state_root, proof, proof_hash) VALUES ($1, $2, $3, $4, $5, $6)"
+	_, err := e.Exec(ctx, addProofHashSQL, proverProof.InitNumBatch, proverProof.FinalNewBatch, proverProof.LocalExitRoot.String(), proverProof.NewStateRoot.String(), proverProof.Proof, proverProof.ProofHash.String())
+	return err
+}
+
+func (p *PostgresStorage) GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error) {
+	var proofHash string
+	const getBatchByNumberSQL = `SELECT proof_hash FROM state.proof_hash WHERE batch_num = $1 and sender = $2 and (block_num + $3) > $4`
+
+	e := p.getExecQuerier(dbTx)
+	err := e.QueryRow(ctx, getBatchByNumberSQL, sender, batchNumber, minCommit, lastBlockNumber).Scan(&proofHash)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	} else if err != nil {
+		return "", err
+	}
+
+	return proofHash, nil
+}
+
+func (p *PostgresStorage) GetProverProofByHash(ctx context.Context, hash string, dbTx pgx.Tx) (*ProverProof, error) {
+	var (
+		init_num_batch, final_new_batch        uint64
+		local_exit_root, new_state_root, proof string
+	)
+	const getBatchByNumberSQL = `SELECT init_num_batch, final_new_batch, local_exit_root, new_state_root, proof FROM state.prover_proof WHERE proof_hash = $1`
+
+	e := p.getExecQuerier(dbTx)
+	err := e.QueryRow(ctx, getBatchByNumberSQL, hash).Scan(&init_num_batch, &final_new_batch, &local_exit_root, &new_state_root, &proof)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &ProverProof{
+		InitNumBatch:  init_num_batch,
+		FinalNewBatch: final_new_batch,
+		LocalExitRoot: common.HexToHash(local_exit_root),
+		NewStateRoot:  common.HexToHash(new_state_root),
+		Proof:         proof,
+		ProofHash:     common.HexToHash(hash),
+	}, nil
 }

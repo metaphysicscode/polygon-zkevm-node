@@ -7,3 +7,15 @@ CREATE TABLE state.proof_hash
     final_new_batch BIGINT NOT NULL,
     proof_hash      VARCHAR NOT NULL
 );
+
+
+CREATE TABLE state.prover_proof
+(
+    id              SERIAL PRIMARY KEY,
+    init_num_batch  BIGINT NOT NULL,
+    final_new_batch BIGINT NOT NULL,
+    local_exit_root VARCHAR,
+    new_state_root  VARCHAR,
+    proof           VARCHAR,
+    proof_hash      VARCHAR NOT NULL REFERENCES state.proof_hash (proof_hash) ON DELETE CASCADE
+);

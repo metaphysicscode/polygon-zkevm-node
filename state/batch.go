@@ -73,3 +73,12 @@ type ProofHash struct {
 	FinalNewBatch uint64
 	ProofHash     common.Hash
 }
+
+type ProverProof struct {
+	InitNumBatch  uint64
+	FinalNewBatch uint64
+	NewStateRoot  common.Hash
+	LocalExitRoot common.Hash
+	Proof         string
+	ProofHash     common.Hash
+}
