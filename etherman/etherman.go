@@ -40,6 +40,7 @@ var (
 	forcedBatchSignatureHash                       = crypto.Keccak256Hash([]byte("ForceBatch(uint64,bytes32,address,bytes)"))
 	sequencedBatchesEventSignatureHash             = crypto.Keccak256Hash([]byte("SequenceBatches(uint64)"))
 	forceSequencedBatchesSignatureHash             = crypto.Keccak256Hash([]byte("SequenceForceBatches(uint64)"))
+	submitProofHash                                = crypto.Keccak256Hash([]byte("SubmitProofHash(address, uint64, uint64, bytes32)"))
 	verifyBatchesSignatureHash                     = crypto.Keccak256Hash([]byte("VerifyBatches(uint64,bytes32,address)"))
 	verifyBatchesTrustedAggregatorSignatureHash    = crypto.Keccak256Hash([]byte("VerifyBatchesTrustedAggregator(uint64,bytes32,address)"))
 	setTrustedSequencerURLSignatureHash            = crypto.Keccak256Hash([]byte("SetTrustedSequencerURL(string)"))
@@ -82,6 +83,8 @@ func SequencedBatchesSigHash() common.Hash { return sequencedBatchesEventSignatu
 // TrustedVerifyBatchesSigHash returns the hash for the `TrustedVerifyBatches` event.
 func TrustedVerifyBatchesSigHash() common.Hash { return verifyBatchesTrustedAggregatorSignatureHash }
 
+func SubmitProofHash() common.Hash { return submitProofHash }
+
 // EventOrder is the the type used to identify the events order
 type EventOrder string
 
@@ -97,7 +100,8 @@ const (
 	// SequenceForceBatchesOrder identifies a SequenceForceBatches event
 	SequenceForceBatchesOrder EventOrder = "SequenceForceBatches"
 	// ForkIDsOrder identifies an updateZkevmVersion event
-	ForkIDsOrder EventOrder = "forkIDs"
+	ForkIDsOrder         EventOrder = "forkIDs"
+	SubmitProofHashOrder EventOrder = "SubmitProofHash"
 )
 
 type ethereumClient interface {
@@ -303,6 +307,8 @@ func (etherMan *Client) processEvent(ctx context.Context, vLog types.Log, blocks
 		return etherMan.forcedBatchEvent(ctx, vLog, blocks, blocksOrder)
 	case verifyBatchesTrustedAggregatorSignatureHash:
 		return etherMan.verifyBatchesTrustedAggregatorEvent(ctx, vLog, blocks, blocksOrder)
+	case submitProofHash:
+		return etherMan.submitProofHashEvent(ctx, vLog, blocks, blocksOrder)
 	case verifyBatchesSignatureHash:
 		log.Warn("VerifyBatches event not implemented yet")
 		return nil
@@ -794,6 +800,50 @@ func (etherMan *Client) verifyBatchesTrustedAggregatorEvent(ctx context.Context,
 	or := Order{
 		Name: TrustedVerifyBatchOrder,
 		Pos:  len((*blocks)[len(*blocks)-1].VerifiedBatches) - 1,
+	}
+	(*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash] = append((*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash], or)
+	return nil
+}
+
+func (etherMan *Client) submitProofHashEvent(ctx context.Context, vLog types.Log, blocks *[]Block, blocksOrder *map[common.Hash][]Order) error {
+	log.Debug("SequenceBatches event detected")
+	sh, err := etherMan.PoE.ParseSubmitProofHash(vLog)
+	if err != nil {
+		return err
+	}
+	// Read the tx for this event.
+	tx, isPending, err := etherMan.EthClient.TransactionByHash(ctx, vLog.TxHash)
+	if err != nil {
+		return err
+	} else if isPending {
+		return fmt.Errorf("error tx is still pending. TxHash: %s", tx.Hash().String())
+	}
+
+	var proofHash ProofHash
+
+	proofHash.BlockNumber = vLog.BlockNumber
+	proofHash.Sender = sh.Prover
+	proofHash.InitNumBatch = sh.InitNumBatch
+	proofHash.FinalNewBatch = sh.FinalNewBatch
+	proofHash.ProofHash = sh.ProofHash
+
+	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
+		fullBlock, err := etherMan.EthClient.BlockByHash(ctx, vLog.BlockHash)
+		if err != nil {
+			return fmt.Errorf("error getting hashParent. BlockNumber: %d. Error: %w", vLog.BlockNumber, err)
+		}
+		block := prepareBlock(vLog, time.Unix(int64(fullBlock.Time()), 0), fullBlock)
+		block.ProofHashs = append(block.ProofHashs, proofHash)
+		*blocks = append(*blocks, block)
+	} else if (*blocks)[len(*blocks)-1].BlockHash == vLog.BlockHash && (*blocks)[len(*blocks)-1].BlockNumber == vLog.BlockNumber {
+		(*blocks)[len(*blocks)-1].ProofHashs = append((*blocks)[len(*blocks)-1].ProofHashs, proofHash)
+	} else {
+		log.Error("Error processing SequencedBatches event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
+		return fmt.Errorf("error processing SequencedBatches event")
+	}
+	or := Order{
+		Name: SubmitProofHashOrder,
+		Pos:  len((*blocks)[len(*blocks)-1].SequencedBatches) - 1,
 	}
 	(*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash] = append((*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash], or)
 	return nil

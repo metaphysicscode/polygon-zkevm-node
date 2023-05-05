@@ -15,6 +15,7 @@ type Block struct {
 	GlobalExitRoots       []GlobalExitRoot
 	ForcedBatches         []ForcedBatch
 	SequencedBatches      [][]SequencedBatch
+	ProofHashs            []ProofHash
 	VerifiedBatches       []VerifiedBatch
 	SequencedForceBatches [][]SequencedForceBatch
 	ForkIDs               []ForkID
@@ -73,4 +74,12 @@ type ForkID struct {
 	BatchNumber uint64
 	ForkID      uint64
 	Version     string
+}
+
+type ProofHash struct {
+	BlockNumber   uint64
+	Sender        common.Address
+	InitNumBatch  uint64
+	FinalNewBatch uint64
+	ProofHash     common.Hash
 }
