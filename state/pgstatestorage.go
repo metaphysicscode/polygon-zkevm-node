@@ -2342,3 +2342,10 @@ func (p *PostgresStorage) GetBatchByForcedBatchNum(ctx context.Context, forcedBa
 
 	return &batch, nil
 }
+
+func (p *PostgresStorage) AddProofHash(ctx context.Context, proofHash *ProofHash, dbTx pgx.Tx) error {
+	e := p.getExecQuerier(dbTx)
+	const addProofHashSQL = "INSERT INTO state.proof_hash (block_num, sender, init_num_batch, final_new_batch, proof_hash) VALUES ($1, $2, $3, $4, $5)"
+	_, err := e.Exec(ctx, addProofHashSQL, proofHash.BlockNumber, proofHash.Sender, proofHash.InitNumBatch, proofHash.FinalNewBatch, proofHash.ProofHash.String())
+	return err
+}

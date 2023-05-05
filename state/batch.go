@@ -65,3 +65,11 @@ type Sequence struct {
 	FromBatchNumber uint64
 	ToBatchNumber   uint64
 }
+
+type ProofHash struct {
+	BlockNumber   uint64
+	Sender        common.Address
+	InitNumBatch  uint64
+	FinalNewBatch uint64
+	ProofHash     common.Hash
+}

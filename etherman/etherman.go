@@ -843,7 +843,7 @@ func (etherMan *Client) submitProofHashEvent(ctx context.Context, vLog types.Log
 	}
 	or := Order{
 		Name: SubmitProofHashOrder,
-		Pos:  len((*blocks)[len(*blocks)-1].SequencedBatches) - 1,
+		Pos:  len((*blocks)[len(*blocks)-1].ProofHashs) - 1,
 	}
 	(*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash] = append((*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash], or)
 	return nil

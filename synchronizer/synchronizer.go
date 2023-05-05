@@ -370,6 +370,12 @@ func (s *ClientSynchronizer) processBlockRange(blocks []etherman.Block, order ma
 				if err != nil {
 					return err
 				}
+			case etherman.SubmitProofHashOrder:
+				err = s.processProofHash(blocks[i].ProofHashs[element.Pos], dbTx)
+				if err != nil {
+					return err
+				}
+
 			}
 		}
 		err = dbTx.Commit(s.ctx)
@@ -1157,6 +1163,17 @@ func (s *ClientSynchronizer) processTrustedBatch(trustedBatch *types.Batch, dbTx
 
 	log.Infof("batch %v synchronized", trustedBatch.Number)
 	return nil
+}
+
+func (s *ClientSynchronizer) processProofHash(proofHash etherman.ProofHash, dbTx pgx.Tx) error {
+	log.Debugf("processing proof hash: %v", proofHash.Sender)
+	return s.state.AddProofHash(s.ctx, &state.ProofHash{
+		BlockNumber:   proofHash.BlockNumber,
+		Sender:        proofHash.Sender,
+		InitNumBatch:  proofHash.InitNumBatch,
+		FinalNewBatch: proofHash.FinalNewBatch,
+		ProofHash:     proofHash.ProofHash,
+	}, dbTx)
 }
 
 func (s *ClientSynchronizer) reorgPool(dbTx pgx.Tx) error {

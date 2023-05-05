@@ -55,6 +55,7 @@ type stateInterface interface {
 	ResetForkID(ctx context.Context, batchNumber, forkID uint64, version string, dbTx pgx.Tx) error
 	GetForkIDTrustedReorgCount(ctx context.Context, forkID uint64, version string, dbTx pgx.Tx) (uint64, error)
 	UpdateForkIDIntervals(intervals []state.ForkIDInterval)
+	AddProofHash(ctx context.Context, proofHash *state.ProofHash, dbTx pgx.Tx) error
 
 	BeginStateTransaction(ctx context.Context) (pgx.Tx, error)
 }
