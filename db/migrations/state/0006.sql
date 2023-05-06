@@ -1,3 +1,8 @@
+-- +migrate Up
+DROP table state.proof_hash;
+DROP table state.prover_proof;
+
+-- +migrate Down
 CREATE TABLE state.proof_hash
 (
     id              SERIAL PRIMARY KEY,
