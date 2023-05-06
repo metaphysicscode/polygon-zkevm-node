@@ -1,9 +1,9 @@
--- +migrate Up
+-- +migrate Down
 DROP table state.proof_hash;
 DROP table state.prover_proof;
 
--- +migrate Down
-CREATE TABLE state.proof_hash
+-- +migrate Up
+CREATE TABLE IF NOT EXISTS state.proof_hash
 (
     id              SERIAL PRIMARY KEY,
     block_num       BIGINT NOT NULL REFERENCES state.block (block_num) ON DELETE CASCADE,
@@ -14,7 +14,7 @@ CREATE TABLE state.proof_hash
 );
 
 
-CREATE TABLE state.prover_proof
+CREATE TABLE IF NOT EXISTS state.prover_proof
 (
     id              SERIAL PRIMARY KEY,
     init_num_batch  BIGINT NOT NULL,
