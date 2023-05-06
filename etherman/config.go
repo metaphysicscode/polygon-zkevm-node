@@ -13,6 +13,7 @@ type Config struct {
 	PoEAddr                   common.Address `mapstructure:"PoEAddr"`
 	MaticAddr                 common.Address `mapstructure:"MaticAddr"`
 	GlobalExitRootManagerAddr common.Address `mapstructure:"GlobalExitRootManagerAddr"`
+	GetForksStartBlkNum       uint64         `mapstructure:"GetForksStartBlkNum"`
 
 	PrivateKeyPath     string `mapstructure:"PrivateKeyPath"`
 	PrivateKeyPassword string `mapstructure:"PrivateKeyPassword"`

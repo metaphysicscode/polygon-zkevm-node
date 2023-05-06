@@ -129,6 +129,7 @@ type Client struct {
 	GlobalExitRootManager *polygonzkevmglobalexitroot.Polygonzkevmglobalexitroot
 	Matic                 *matic.Matic
 	SCAddresses           []common.Address
+	GetForksStartBlkNum   uint64
 
 	GasProviders externalGasProviders
 
@@ -219,7 +220,7 @@ func (etherMan *Client) VerifyGenBlockNumber(ctx context.Context, genBlockNumber
 func (etherMan *Client) GetForks(ctx context.Context) ([]state.ForkIDInterval, error) {
 	// Filter query
 	query := ethereum.FilterQuery{
-		FromBlock: new(big.Int).SetUint64(1),
+		FromBlock: new(big.Int).SetUint64(etherMan.GetForksStartBlkNum),
 		Addresses: etherMan.SCAddresses,
 		Topics:    [][]common.Hash{{updateZkEVMVersionSignatureHash}},
 	}
