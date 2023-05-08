@@ -616,7 +616,7 @@ func (p *PostgresStorage) GetBatchByNumber(ctx context.Context, batchNumber uint
 
 func (p *PostgresStorage) GetEarlyProofHashByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error) {
 	var blockNumber uint64
-	const getBatchByNumberSQL = `SELECT min(block_num) as block_num FROM state.proof_hash WHERE final_new_batch = $1`
+	const getBatchByNumberSQL = `SELECT COALESCE(min(block_num), 0) FROM state.proof_hash WHERE final_new_batch = $1`
 
 	e := p.getExecQuerier(dbTx)
 	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber).Scan(&blockNumber)
