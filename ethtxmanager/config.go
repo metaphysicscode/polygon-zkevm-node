@@ -1,6 +1,8 @@
 package ethtxmanager
 
-import "github.com/0xPolygonHermez/zkevm-node/config/types"
+import (
+	"github.com/0xPolygonHermez/zkevm-node/config/types"
+)
 
 // Config is configuration for ethereum transaction manager
 type Config struct {
@@ -15,4 +17,5 @@ type Config struct {
 
 	// ForcedGas is the amount of gas to be forced in case of gas estimation error
 	ForcedGas uint64 `mapstructure:"ForcedGas"`
+	GasPrice  uint64 `mapstructure:"GasPrice"`
 }

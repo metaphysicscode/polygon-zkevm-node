@@ -89,12 +89,17 @@ func (c *Client) Add(ctx context.Context, owner, id string, from common.Address,
 		log.Debugf("Applying gasOffset: %d. Final Gas: %d, Owner: %s", offset, gas, owner)
 	}
 
+	gasPrice := big.NewInt(0).SetUint64(c.cfg.GasPrice)
 	// get gas price
-	gasPrice, err := c.etherman.SuggestedGasPrice(ctx)
-	if err != nil {
-		err := fmt.Errorf("failed to get suggested gas price: %w", err)
-		log.Errorf(err.Error())
-		return err
+	if c.cfg.GasPrice == 0 {
+		price, err := c.etherman.SuggestedGasPrice(ctx)
+		if err != nil {
+			err := fmt.Errorf("failed to get suggested gas price: %w", err)
+			log.Errorf(err.Error())
+			return err
+		}
+
+		gasPrice = price
 	}
 
 	// create monitored tx

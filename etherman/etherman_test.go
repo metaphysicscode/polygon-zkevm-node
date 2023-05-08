@@ -52,6 +52,10 @@ func newTestingEnv() (ethman *Client, ethBackend *backends.SimulatedBackend, aut
 	return ethman, ethBackend, auth, maticAddr, br
 }
 
+func TestEvent(t *testing.T) {
+	t.Fatal(verifyBatchesTrustedAggregatorSignatureHash)
+}
+
 func TestGEREvent(t *testing.T) {
 	// Set up testing environment
 	etherman, ethBackend, auth, _, br := newTestingEnv()

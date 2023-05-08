@@ -40,7 +40,7 @@ var (
 	forcedBatchSignatureHash                       = crypto.Keccak256Hash([]byte("ForceBatch(uint64,bytes32,address,bytes)"))
 	sequencedBatchesEventSignatureHash             = crypto.Keccak256Hash([]byte("SequenceBatches(uint64)"))
 	forceSequencedBatchesSignatureHash             = crypto.Keccak256Hash([]byte("SequenceForceBatches(uint64)"))
-	submitProofHash                                = crypto.Keccak256Hash([]byte("SubmitProofHash(address, uint64, uint64, bytes32)"))
+	submitProofHash                                = crypto.Keccak256Hash([]byte("SubmitProofHash(address,uint64,uint64,bytes32)"))
 	verifyBatchesSignatureHash                     = crypto.Keccak256Hash([]byte("VerifyBatches(uint64,bytes32,address)"))
 	verifyBatchesTrustedAggregatorSignatureHash    = crypto.Keccak256Hash([]byte("VerifyBatchesTrustedAggregator(uint64,bytes32,address)"))
 	setTrustedSequencerURLSignatureHash            = crypto.Keccak256Hash([]byte("SetTrustedSequencerURL(string)"))
@@ -129,7 +129,6 @@ type Client struct {
 	GlobalExitRootManager *polygonzkevmglobalexitroot.Polygonzkevmglobalexitroot
 	Matic                 *matic.Matic
 	SCAddresses           []common.Address
-	GetForksStartBlkNum   uint64
 
 	GasProviders externalGasProviders
 
@@ -220,7 +219,7 @@ func (etherMan *Client) VerifyGenBlockNumber(ctx context.Context, genBlockNumber
 func (etherMan *Client) GetForks(ctx context.Context) ([]state.ForkIDInterval, error) {
 	// Filter query
 	query := ethereum.FilterQuery{
-		FromBlock: new(big.Int).SetUint64(etherMan.GetForksStartBlkNum),
+		FromBlock: new(big.Int).SetUint64(1),
 		Addresses: etherMan.SCAddresses,
 		Topics:    [][]common.Hash{{updateZkEVMVersionSignatureHash}},
 	}
@@ -1226,6 +1225,7 @@ func newAuthFromKeystore(path, password string, chainID uint64) (bind.TransactOp
 	if err != nil {
 		return bind.TransactOpts{}, err
 	}
+	auth.GasLimit = 500000
 	return *auth, nil
 }
 

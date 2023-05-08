@@ -66,6 +66,6 @@ type stateInterface interface {
 	GetEarlyProofHashByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error)
 	GetLastBlock(ctx context.Context, dbTx pgx.Tx) (*state.Block, error)
 	GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error)
-	GetProverProofByHash(ctx context.Context, hash string, dbTx pgx.Tx) (*state.ProverProof, error)
+	GetProverProofByHash(ctx context.Context, hash string, batchNumberFinal uint64, dbTx pgx.Tx) (*state.ProverProof, error)
 	AddProverProof(ctx context.Context, proverProof *state.ProverProof, dbTx pgx.Tx) error
 }

@@ -616,13 +616,13 @@ func (p *PostgresStorage) GetBatchByNumber(ctx context.Context, batchNumber uint
 
 func (p *PostgresStorage) GetEarlyProofHashByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error) {
 	var blockNumber uint64
-	const getBatchByNumberSQL = `SELECT min(block_num) as block_num FROM state.proof_hash WHERE batch_num = $1`
+	const getBatchByNumberSQL = `SELECT min(block_num) as block_num FROM state.proof_hash WHERE final_new_batch = $1`
 
 	e := p.getExecQuerier(dbTx)
 	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber).Scan(&blockNumber)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, ErrNotFound
+		return 0, nil
 	} else if err != nil {
 		return 0, err
 	}
@@ -2375,10 +2375,10 @@ func (p *PostgresStorage) AddProverProof(ctx context.Context, proverProof *Prove
 
 func (p *PostgresStorage) GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error) {
 	var proofHash string
-	const getBatchByNumberSQL = `SELECT proof_hash FROM state.proof_hash WHERE batch_num = $1 and sender = $2 and (block_num + $3) > $4`
+	const getBatchByNumberSQL = `SELECT proof_hash FROM state.proof_hash WHERE final_new_batch = $1 and lower(sender) = lower($2) and (block_num + $3) < $4`
 
 	e := p.getExecQuerier(dbTx)
-	err := e.QueryRow(ctx, getBatchByNumberSQL, sender, batchNumber, minCommit, lastBlockNumber).Scan(&proofHash)
+	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber, sender, minCommit, lastBlockNumber).Scan(&proofHash)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
@@ -2389,15 +2389,15 @@ func (p *PostgresStorage) GetProofHashBySender(ctx context.Context, sender strin
 	return proofHash, nil
 }
 
-func (p *PostgresStorage) GetProverProofByHash(ctx context.Context, hash string, dbTx pgx.Tx) (*ProverProof, error) {
+func (p *PostgresStorage) GetProverProofByHash(ctx context.Context, hash string, batchNumberFinal uint64, dbTx pgx.Tx) (*ProverProof, error) {
 	var (
 		init_num_batch, final_new_batch        uint64
 		local_exit_root, new_state_root, proof string
 	)
-	const getBatchByNumberSQL = `SELECT init_num_batch, final_new_batch, local_exit_root, new_state_root, proof FROM state.prover_proof WHERE proof_hash = $1`
+	const getBatchByNumberSQL = `SELECT init_num_batch, final_new_batch, local_exit_root, new_state_root, proof FROM state.prover_proof WHERE proof_hash = $1 and final_new_batch = $2`
 
 	e := p.getExecQuerier(dbTx)
-	err := e.QueryRow(ctx, getBatchByNumberSQL, hash).Scan(&init_num_batch, &final_new_batch, &local_exit_root, &new_state_root, &proof)
+	err := e.QueryRow(ctx, getBatchByNumberSQL, hash, batchNumberFinal).Scan(&init_num_batch, &final_new_batch, &local_exit_root, &new_state_root, &proof)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound

@@ -337,7 +337,7 @@ func (_m *StateMock) AddProverProof(ctx context.Context, proverProof *state.Prov
 	return nil
 }
 
-func (_m *StateMock) GetProverProofByHash(ctx context.Context, hash string, dbTx pgx.Tx) (*state.ProverProof, error) {
+func (_m *StateMock) GetProverProofByHash(ctx context.Context, hash string, batchNumberFinal uint64, dbTx pgx.Tx) (*state.ProverProof, error) {
 	ret := _m.Called(ctx, dbTx)
 
 	var r0 *state.ProverProof

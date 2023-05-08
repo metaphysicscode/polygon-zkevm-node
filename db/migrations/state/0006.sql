@@ -22,5 +22,5 @@ CREATE TABLE IF NOT EXISTS state.prover_proof
     local_exit_root VARCHAR,
     new_state_root  VARCHAR,
     proof           VARCHAR,
-    proof_hash      VARCHAR NOT NULL REFERENCES state.proof_hash (proof_hash) ON DELETE CASCADE
+    proof_hash      VARCHAR NOT NULL REFERENCES
 );
