@@ -95,6 +95,8 @@ const (
 	SequenceBatchesOrder EventOrder = "SequenceBatches"
 	// ForcedBatchesOrder identifies a ForcedBatches event
 	ForcedBatchesOrder EventOrder = "ForcedBatches"
+	// UnTrustedVerifyBatchOrder identifies a UnTrustedVerifyBatch event
+	UnTrustedVerifyBatchOrder EventOrder = "UnTrustedVerifyBatch"
 	// TrustedVerifyBatchOrder identifies a TrustedVerifyBatch event
 	TrustedVerifyBatchOrder EventOrder = "TrustedVerifyBatch"
 	// SequenceForceBatchesOrder identifies a SequenceForceBatches event
@@ -310,8 +312,8 @@ func (etherMan *Client) processEvent(ctx context.Context, vLog types.Log, blocks
 	case submitProofHash:
 		return etherMan.submitProofHashEvent(ctx, vLog, blocks, blocksOrder)
 	case verifyBatchesSignatureHash:
-		log.Warn("VerifyBatches event not implemented yet")
-		return nil
+		//log.Warn("VerifyBatches event not implemented yet")
+		return etherMan.verifyBatchesEvent(ctx, vLog, blocks, blocksOrder)
 	case forceSequencedBatchesSignatureHash:
 		return etherMan.forceSequencedBatchesEvent(ctx, vLog, blocks, blocksOrder)
 	case setTrustedSequencerURLSignatureHash:
@@ -839,6 +841,42 @@ func decodeSequences(txData []byte, lastBatchNumber uint64, sequencer common.Add
 	}
 
 	return sequencedBatches, nil
+}
+
+func (etherMan *Client) verifyBatchesEvent(ctx context.Context, vLog types.Log, blocks *[]Block, blocksOrder *map[common.Hash][]Order) error {
+	log.Debug("TrustedVerifyBatches event detected")
+	vb, err := etherMan.PoE.ParseVerifyBatches(vLog)
+	if err != nil {
+		return err
+	}
+	var trustedVerifyBatch VerifiedBatch
+	trustedVerifyBatch.BlockNumber = vLog.BlockNumber
+	trustedVerifyBatch.BatchNumber = vb.NumBatch
+	trustedVerifyBatch.TxHash = vLog.TxHash
+	trustedVerifyBatch.StateRoot = vb.StateRoot
+	trustedVerifyBatch.Aggregator = vb.Aggregator
+
+	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
+		fullBlock, err := etherMan.EthClient.BlockByHash(ctx, vLog.BlockHash)
+		if err != nil {
+			return fmt.Errorf("error getting hashParent. BlockNumber: %d. Error: %w", vLog.BlockNumber, err)
+		}
+		block := prepareBlock(vLog, time.Unix(int64(fullBlock.Time()), 0), fullBlock)
+		block.VerifiedBatches = append(block.VerifiedBatches, trustedVerifyBatch)
+		*blocks = append(*blocks, block)
+	} else if (*blocks)[len(*blocks)-1].BlockHash == vLog.BlockHash && (*blocks)[len(*blocks)-1].BlockNumber == vLog.BlockNumber {
+		(*blocks)[len(*blocks)-1].VerifiedBatches = append((*blocks)[len(*blocks)-1].VerifiedBatches, trustedVerifyBatch)
+	} else {
+		log.Error("Error processing trustedVerifyBatch event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
+		return fmt.Errorf("error processing trustedVerifyBatch event")
+	}
+	or := Order{
+		//Name: UnTrustedVerifyBatchOrder,
+		Name: TrustedVerifyBatchOrder,
+		Pos:  len((*blocks)[len(*blocks)-1].VerifiedBatches) - 1,
+	}
+	(*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash] = append((*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash], or)
+	return nil
 }
 
 func (etherMan *Client) verifyBatchesTrustedAggregatorEvent(ctx context.Context, vLog types.Log, blocks *[]Block, blocksOrder *map[common.Hash][]Order) error {
