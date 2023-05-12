@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -371,10 +372,27 @@ func (a *Aggregator) sendFinalProof() {
 
 			// add batch verification to be monitored
 			sender := common.HexToAddress(a.cfg.SenderAddress)
-			to, data, err := a.Ethman.BuildTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
+			aggregator, err := a.Ethman.TrustedAggregator()
 			if err != nil {
-				log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
+				log.Errorf("Failed to get trusted aggregator address, err %v", err)
 				continue
+			}
+
+			var to *common.Address
+			var data []byte
+			if !bytes.Equal(sender.Bytes(), aggregator.Bytes()) {
+				to, data, err = a.Ethman.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
+				if err != nil {
+					log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
+					//a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+					continue
+				}
+			} else {
+				to, data, err = a.Ethman.BuildTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
+				if err != nil {
+					log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
+					continue
+				}
 			}
 			monitoredTxID := buildMonitoredTxID(proverProof.InitNumBatch, proverProof.FinalNewBatch)
 			err = a.EthTxManager.Add(a.ctx, ethTxManagerOwner, monitoredTxID, sender, to, nil, data, nil)

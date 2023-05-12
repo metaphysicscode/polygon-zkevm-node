@@ -573,6 +573,50 @@ func (etherMan *Client) BuildProofHashTxData(lastVerifiedBatch, newVerifiedBatch
 	return tx.To(), tx.Data(), nil
 }
 
+// BuildUnTrustedVerifyBatchesTxData builds a []bytes to be sent to the PoE SC method VerifyBatches.
+func (etherMan *Client) BuildUnTrustedVerifyBatchesTxData(lastVerifiedBatch, newVerifiedBatch uint64, inputs *ethmanTypes.FinalProofInputs) (to *common.Address, data []byte, err error) {
+	opts, err := etherMan.generateRandomAuth()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build trusted verify batches, err: %w", err)
+	}
+	opts.NoSend = true
+	// force nonce, gas limit and gas price to avoid querying it from the chain
+	opts.Nonce = big.NewInt(1)
+	opts.GasLimit = uint64(1)
+	opts.GasPrice = big.NewInt(1)
+
+	var newLocalExitRoot [32]byte
+	copy(newLocalExitRoot[:], inputs.NewLocalExitRoot)
+
+	var newStateRoot [32]byte
+	copy(newStateRoot[:], inputs.NewStateRoot)
+
+	proof, err := encoding.DecodeBytes(&inputs.FinalProof.Proof)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode proof, err: %w", err)
+	}
+
+	const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
+
+	tx, err := etherMan.PoE.VerifyBatches(
+		&opts,
+		pendStateNum,
+		lastVerifiedBatch,
+		newVerifiedBatch,
+		newLocalExitRoot,
+		newStateRoot,
+		proof,
+	)
+	if err != nil {
+		if parsedErr, ok := tryParseError(err); ok {
+			err = parsedErr
+		}
+		return nil, nil, err
+	}
+
+	return tx.To(), tx.Data(), nil
+}
+
 // BuildTrustedVerifyBatchesTxData builds a []bytes to be sent to the PoE SC method TrustedVerifyBatches.
 func (etherMan *Client) BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVerifiedBatch uint64, inputs *ethmanTypes.FinalProofInputs) (to *common.Address, data []byte, err error) {
 	opts, err := etherMan.generateRandomAuth()
@@ -630,6 +674,11 @@ func (etherMan *Client) GetSendSequenceFee(numBatches uint64) (*big.Int, error) 
 // TrustedSequencer gets trusted sequencer address
 func (etherMan *Client) TrustedSequencer() (common.Address, error) {
 	return etherMan.PoE.TrustedSequencer(&bind.CallOpts{Pending: false})
+}
+
+// TrustedAggregator gets trusted Aggregator address
+func (etherMan *Client) TrustedAggregator() (common.Address, error) {
+	return etherMan.PoE.TrustedAggregator(&bind.CallOpts{Pending: false})
 }
 
 func (etherMan *Client) forcedBatchEvent(ctx context.Context, vLog types.Log, blocks *[]Block, blocksOrder *map[common.Hash][]Order) error {
