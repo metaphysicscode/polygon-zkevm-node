@@ -231,29 +231,29 @@ func (a *Aggregator) Channel(stream pb.AggregatorService_ChannelServer) error {
 				log.Errorf("Error checking proofs to verify: %v", err)
 			}
 
-			proofGenerated, err := a.tryGenerateBatchProof(ctx, prover)
-			if err != nil {
-				log.Errorf("Error trying to generate proof: %v", err)
-			}
-			if !proofGenerated {
-				// if no proof was generated (aggregated or batch) wait some time before retry
-				time.Sleep(a.cfg.RetryTime.Duration)
-			} // if proof was generated we retry immediately as probably we have more proofs to process
-
-			// proofGenerated, err := a.tryAggregateProofs(ctx, prover)
+			// proofGenerated, err := a.tryGenerateBatchProof(ctx, prover)
 			// if err != nil {
-			// 	log.Errorf("Error trying to aggregate proofs: %v", err)
-			// }
-			// if !proofGenerated {
-			// 	proofGenerated, err = a.tryGenerateBatchProof(ctx, prover)
-			// 	if err != nil {
-			// 		log.Errorf("Error trying to generate proof: %v", err)
-			// 	}
+			// 	log.Errorf("Error trying to generate proof: %v", err)
 			// }
 			// if !proofGenerated {
 			// 	// if no proof was generated (aggregated or batch) wait some time before retry
 			// 	time.Sleep(a.cfg.RetryTime.Duration)
 			// } // if proof was generated we retry immediately as probably we have more proofs to process
+
+			proofGenerated, err := a.tryAggregateProofs(ctx, prover)
+			if err != nil {
+				log.Errorf("Error trying to aggregate proofs: %v", err)
+			}
+			if !proofGenerated {
+				proofGenerated, err = a.tryGenerateBatchProof(ctx, prover)
+				if err != nil {
+					log.Errorf("Error trying to generate proof: %v", err)
+				}
+			}
+			if !proofGenerated {
+				// if no proof was generated (aggregated or batch) wait some time before retry
+				time.Sleep(a.cfg.RetryTime.Duration)
+			} // if proof was generated we retry immediately as probably we have more proofs to process
 		}
 	}
 }
