@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	"context"
+
 	common "github.com/ethereum/go-ethereum/common"
 	mock "github.com/stretchr/testify/mock"
 
@@ -105,6 +107,10 @@ func (_m *Etherman) GetLatestVerifiedBatchNum() (uint64, error) {
 	}
 
 	return r0, r1
+}
+
+func (_m *Etherman) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
+	return 1, nil
 }
 
 type mockConstructorTestingTNewEtherman interface {
