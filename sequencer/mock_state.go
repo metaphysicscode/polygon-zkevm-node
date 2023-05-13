@@ -820,6 +820,10 @@ func (_m *StateMock) UpdateBatchL2Data(ctx context.Context, batchNumber uint64, 
 	return r0
 }
 
+func (_m *StateMock) GetSequenceLastCommitBlock(ctx context.Context, owner string, dbTx pgx.Tx) (string, uint64, error) {
+	return "", 1, nil
+}
+
 type mockConstructorTestingTNewStateMock interface {
 	mock.TestingT
 	Cleanup(func())

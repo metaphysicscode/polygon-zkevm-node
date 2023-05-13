@@ -2452,3 +2452,19 @@ func (p *PostgresStorage) GetProverProofByHash(ctx context.Context, hash string,
 		ProofHash:     common.HexToHash(hash),
 	}, nil
 }
+
+func (p *PostgresStorage) GetSequenceLastCommitBlock(ctx context.Context, owner string, dbTx pgx.Tx) (string, uint64, error) {
+	e := p.getExecQuerier(dbTx)
+	cmd := `SELECT id, COALESCE(block_num, 0) FROM state.monitored_txs where owner = $1 and status = 'sent'`
+	var blockNumber uint64
+	var id string
+	err := e.QueryRow(ctx, cmd, owner).Scan(&id, &blockNumber)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", 0, ErrNotFound
+	} else if err != nil {
+		return "", 0, err
+	}
+
+	return id, blockNumber, nil
+}

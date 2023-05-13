@@ -632,6 +632,10 @@ func (etherMan *Client) TrustedSequencer() (common.Address, error) {
 	return etherMan.PoE.TrustedSequencer(&bind.CallOpts{Pending: false})
 }
 
+func (etherMan *Client) BlockCommitBatchs(blockNumber uint64) (bool, error) {
+	return etherMan.PoE.BlockCommitBatchs(&bind.CallOpts{Pending: false}, big.NewInt(0).SetUint64(blockNumber))
+}
+
 func (etherMan *Client) forcedBatchEvent(ctx context.Context, vLog types.Log, blocks *[]Block, blocksOrder *map[common.Hash][]Order) error {
 	log.Debug("ForceBatch event detected")
 	fb, err := etherMan.PoE.ParseForceBatch(vLog)

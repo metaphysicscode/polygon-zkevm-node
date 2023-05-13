@@ -1,6 +1,6 @@
--- +migrate Down
-DROP table state.proof_hash;
-DROP table state.prover_proof;
+-- -- +migrate Down
+-- DROP table state.proof_hash;
+-- DROP table state.prover_proof;
 
 -- +migrate Up
 CREATE TABLE IF NOT EXISTS state.proof_hash
