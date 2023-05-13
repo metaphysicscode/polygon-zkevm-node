@@ -45,7 +45,7 @@ func (s *Sequencer) tryToSendSequence(ctx context.Context, ticker *time.Ticker) 
 		return
 	}
 
-	if block == 0 {
+	if err != state.ErrNotFound && block == 0 {
 		log.Infof("walt for save batchs to block. id = %s", id)
 		waitTick(ctx, ticker)
 		return
