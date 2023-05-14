@@ -214,6 +214,18 @@ func (a *Aggregator) Channel(stream pb.AggregatorService_ChannelServer) error {
 			return ctx.Err()
 
 		default:
+			depoist, err := a.Ethman.JudgeAggregatorDeposit(common.HexToAddress(a.cfg.SenderAddress))
+			if !depoist {
+				if err != nil {
+					log.Errorf("Failed to get deposit acount: %v", err)
+				} else {
+					log.Debugf("Check deposit amount. senderAddress: %s", a.cfg.SenderAddress)
+				}
+
+				time.Sleep(a.cfg.RetryTime.Duration)
+				continue
+			}
+
 			isIdle, err := prover.IsIdle()
 			if err != nil {
 				log.Errorf("Failed to check if prover is idle: %v", err)

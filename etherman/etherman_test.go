@@ -85,6 +85,14 @@ func TestGEREvent(t *testing.T) {
 	assert.Equal(t, common.Hash{}, blocks[1].GlobalExitRoots[0].RollupExitRoot)
 }
 
+func TestValue(t *testing.T) {
+	decimal := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(18), big.NewInt(0))
+	amount := big.NewInt(0).SetUint64(min_deposits)
+	amount = amount.Mul(amount, decimal)
+
+	t.Fatal(decimal.String(), amount.String())
+}
+
 func TestForcedBatchEvent(t *testing.T) {
 	// Set up testing environment
 	etherman, ethBackend, auth, _, _ := newTestingEnv()

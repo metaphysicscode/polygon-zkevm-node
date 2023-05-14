@@ -113,6 +113,10 @@ func (_m *Etherman) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
 	return 1, nil
 }
 
+func (_m *Etherman)  JudgeAggregatorDeposit(account common.Address) (bool, error) {
+	return  true,nil
+}
+
 type mockConstructorTestingTNewEtherman interface {
 	mock.TestingT
 	Cleanup(func())
@@ -127,3 +131,4 @@ func NewEtherman(t mockConstructorTestingTNewEtherman) *Etherman {
 
 	return mock
 }
+

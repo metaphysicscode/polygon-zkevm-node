@@ -16,6 +16,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-node/encoding"
 	"github.com/0xPolygonHermez/zkevm-node/etherman/etherscan"
 	"github.com/0xPolygonHermez/zkevm-node/etherman/ethgasstation"
+	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/deposit"
 	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/matic"
 	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/polygonzkevm"
 	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/polygonzkevmglobalexitroot"
@@ -102,6 +103,8 @@ const (
 	// ForkIDsOrder identifies an updateZkevmVersion event
 	ForkIDsOrder         EventOrder = "forkIDs"
 	SubmitProofHashOrder EventOrder = "SubmitProofHash"
+
+	min_deposits = 100000
 )
 
 type ethereumClient interface {
@@ -129,6 +132,7 @@ type Client struct {
 	GlobalExitRootManager *polygonzkevmglobalexitroot.Polygonzkevmglobalexitroot
 	Matic                 *matic.Matic
 	SCAddresses           []common.Address
+	Deposit               *deposit.Deposit
 
 	GasProviders externalGasProviders
 
@@ -149,6 +153,21 @@ func NewClient(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	depositContract, err := poe.IdeDeposit(&bind.CallOpts{Pending: false})
+	if err != nil {
+		return nil, err
+	}
+
+	if (depositContract == common.Address{}) {
+		return nil, errors.New("not set contract address fro deposit")
+	}
+
+	deposit, err := deposit.NewDeposit(depositContract, ethClient)
+	if err != nil {
+		return nil, err
+	}
+
 	globalExitRoot, err := polygonzkevmglobalexitroot.NewPolygonzkevmglobalexitroot(cfg.GlobalExitRootManagerAddr, ethClient)
 	if err != nil {
 		return nil, err
@@ -177,6 +196,7 @@ func NewClient(cfg Config) (*Client, error) {
 		Matic:                 matic,
 		GlobalExitRootManager: globalExitRoot,
 		SCAddresses:           scAddresses,
+		Deposit:               deposit,
 		GasProviders: externalGasProviders{
 			MultiGasProvider: cfg.MultiGasProvider,
 			Providers:        gProviders,
@@ -615,6 +635,24 @@ func (etherMan *Client) BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVe
 	}
 
 	return tx.To(), tx.Data(), nil
+}
+
+func (etherMan *Client) JudgeAggregatorDeposit(account common.Address) (bool, error) {
+	// min_deposits: todo get from poe
+	decimal := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(18), big.NewInt(0))
+	amount := big.NewInt(0).SetUint64(min_deposits)
+	amount = amount.Mul(amount, decimal)
+	big.NewInt(0)
+	depositAmount, err := etherMan.Deposit.DepositOf(&bind.CallOpts{Pending: false}, account)
+	if err != nil {
+		return false, err
+	}
+
+	if depositAmount.Cmp(amount) < -1 {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // GetSendSequenceFee get super/trusted sequencer fee

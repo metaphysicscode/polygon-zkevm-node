@@ -41,6 +41,7 @@ type etherman interface {
 	BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVerifiedBatch uint64, inputs *ethmanTypes.FinalProofInputs) (to *common.Address, data []byte, err error)
 	BuildProofHashTxData(lastVerifiedBatch, newVerifiedBatch uint64, proofHash common.Hash) (to *common.Address, data []byte, err error)
 	GetLatestBlockNumber(ctx context.Context) (uint64, error)
+	JudgeAggregatorDeposit(account common.Address) (bool, error)
 }
 
 // aggregatorTxProfitabilityChecker interface for different profitability
