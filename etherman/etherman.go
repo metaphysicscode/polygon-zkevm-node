@@ -598,7 +598,12 @@ func (etherMan *Client) BuildUnTrustedVerifyBatchesTxData(lastVerifiedBatch, new
 		return nil, nil, fmt.Errorf("failed to decode proof, err: %w", err)
 	}
 
-	const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
+	pendStateNum, err := etherMan.PoE.LastPendingState(&bind.CallOpts{Pending: false})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get LastPendingState, err: %w", err)
+	}
+
+	//const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
 
 	tx, err := etherMan.PoE.VerifyBatches(
 		&opts,
@@ -642,7 +647,12 @@ func (etherMan *Client) BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVe
 		return nil, nil, fmt.Errorf("failed to decode proof, err: %w", err)
 	}
 
-	const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
+	pendStateNum, err := etherMan.PoE.LastPendingState(&bind.CallOpts{Pending: false})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get LastPendingState, err: %w", err)
+	}
+
+	//const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
 
 	tx, err := etherMan.PoE.VerifyBatchesTrustedAggregator(
 		&opts,
@@ -870,11 +880,26 @@ func (etherMan *Client) verifyBatchesEvent(ctx context.Context, vLog types.Log, 
 		log.Error("Error processing trustedVerifyBatch event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
 		return fmt.Errorf("error processing trustedVerifyBatch event")
 	}
-	or := Order{
-		//Name: UnTrustedVerifyBatchOrder,
-		Name: TrustedVerifyBatchOrder,
-		Pos:  len((*blocks)[len(*blocks)-1].VerifiedBatches) - 1,
+
+	timeout, err := etherMan.PoE.PendingStateTimeout(&bind.CallOpts{Pending: false})
+	if err != nil {
+		return fmt.Errorf("faild to get pendingstatetimeout. Error: %w", err)
 	}
+	var or Order
+	if timeout != 0 {
+		or = Order{
+			Name: UnTrustedVerifyBatchOrder,
+			//Name: TrustedVerifyBatchOrder,
+			Pos: len((*blocks)[len(*blocks)-1].VerifiedBatches) - 1,
+		}
+	} else {
+		or = Order{
+			//Name: UnTrustedVerifyBatchOrder,
+			Name: TrustedVerifyBatchOrder,
+			Pos:  len((*blocks)[len(*blocks)-1].VerifiedBatches) - 1,
+		}
+	}
+
 	(*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash] = append((*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash], or)
 	return nil
 }
