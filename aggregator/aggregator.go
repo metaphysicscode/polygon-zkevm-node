@@ -380,6 +380,12 @@ func (a *Aggregator) sendFinalProof() {
 
 			var to *common.Address
 			var data []byte
+			a.EthTxManager.ProcessPendingMonitoredTxs(a.ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
+				if result.Status == ethtxmanager.MonitoredTxStatusFailed {
+					//todo: when tx is failded ,how to get LastPendingState
+				}
+			}, nil)
+
 			if !bytes.Equal(sender.Bytes(), aggregator.Bytes()) {
 				to, data, err = a.Ethman.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
 				if err != nil {

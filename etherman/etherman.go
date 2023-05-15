@@ -134,8 +134,9 @@ type Client struct {
 
 	GasProviders externalGasProviders
 
-	cfg  Config
-	auth map[common.Address]bind.TransactOpts // empty in case of read-only client
+	cfg     Config
+	auth    map[common.Address]bind.TransactOpts // empty in case of read-only client
+	timeout uint64
 }
 
 // NewClient creates a new etherman.
@@ -173,6 +174,11 @@ func NewClient(cfg Config) (*Client, error) {
 		gProviders = append(gProviders, ethgasstation.NewEthGasStationService())
 	}
 
+	_timeout, err := poe.PendingStateTimeout(&bind.CallOpts{Pending: false})
+	if err != nil {
+		return nil, err
+	}
+
 	return &Client{
 		EthClient:             ethClient,
 		PoE:                   poe,
@@ -183,8 +189,9 @@ func NewClient(cfg Config) (*Client, error) {
 			MultiGasProvider: cfg.MultiGasProvider,
 			Providers:        gProviders,
 		},
-		cfg:  cfg,
-		auth: map[common.Address]bind.TransactOpts{},
+		cfg:     cfg,
+		auth:    map[common.Address]bind.TransactOpts{},
+		timeout: _timeout,
 	}, nil
 }
 
@@ -356,7 +363,8 @@ func (etherMan *Client) processEvent(ctx context.Context, vLog types.Log, blocks
 		return nil
 	case setPendingStateTimeoutSignatureHash:
 		log.Debug("SetPendingStateTimeout event detected")
-		return nil
+		return etherMan.updateTimeout(ctx, vLog, blocks, blocksOrder)
+		//return nil
 	case setMultiplierBatchFeeSignatureHash:
 		log.Debug("SetMultiplierBatchFee event detected")
 		return nil
@@ -418,6 +426,17 @@ func (etherMan *Client) updateZkevmVersion(ctx context.Context, vLog types.Log, 
 		Pos:  len((*blocks)[len(*blocks)-1].ForkIDs) - 1,
 	}
 	(*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash] = append((*blocksOrder)[(*blocks)[len(*blocks)-1].BlockHash], or)
+	return nil
+}
+
+func (etherMan *Client) updateTimeout(ctx context.Context, vLog types.Log, blocks *[]Block, blocksOrder *map[common.Hash][]Order) error {
+	log.Debug("UpdateTimeout event detected")
+	PendingStateTimeout, err := etherMan.PoE.ParseSetPendingStateTimeout(vLog)
+	if err != nil {
+		log.Error("error parsing SetPendingStateTimeout event. Error: ", err)
+		return err
+	}
+	etherMan.timeout = PendingStateTimeout.NewPendingStateTimeout
 	return nil
 }
 
@@ -881,10 +900,8 @@ func (etherMan *Client) verifyBatchesEvent(ctx context.Context, vLog types.Log, 
 		return fmt.Errorf("error processing trustedVerifyBatch event")
 	}
 
-	timeout, err := etherMan.PoE.PendingStateTimeout(&bind.CallOpts{Pending: false})
-	if err != nil {
-		return fmt.Errorf("faild to get pendingstatetimeout. Error: %w", err)
-	}
+	timeout := etherMan.timeout
+
 	var or Order
 	if timeout != 0 {
 		or = Order{
