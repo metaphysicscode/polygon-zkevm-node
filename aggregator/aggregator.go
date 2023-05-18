@@ -215,6 +215,18 @@ func (a *Aggregator) Channel(stream pb.AggregatorService_ChannelServer) error {
 			return ctx.Err()
 
 		default:
+			depoist, err := a.Ethman.JudgeAggregatorDeposit(common.HexToAddress(a.cfg.SenderAddress))
+			if !depoist {
+				if err != nil {
+					log.Errorf("Failed to get deposit acount: %v", err)
+				} else {
+					log.Debugf("Check deposit amount. senderAddress: %s", a.cfg.SenderAddress)
+				}
+
+				time.Sleep(a.cfg.RetryTime.Duration)
+				continue
+			}
+
 			isIdle, err := prover.IsIdle()
 			if err != nil {
 				log.Errorf("Failed to check if prover is idle: %v", err)
@@ -232,29 +244,29 @@ func (a *Aggregator) Channel(stream pb.AggregatorService_ChannelServer) error {
 				log.Errorf("Error checking proofs to verify: %v", err)
 			}
 
-			proofGenerated, err := a.tryGenerateBatchProof(ctx, prover)
-			if err != nil {
-				log.Errorf("Error trying to generate proof: %v", err)
-			}
-			if !proofGenerated {
-				// if no proof was generated (aggregated or batch) wait some time before retry
-				time.Sleep(a.cfg.RetryTime.Duration)
-			} // if proof was generated we retry immediately as probably we have more proofs to process
-
-			// proofGenerated, err := a.tryAggregateProofs(ctx, prover)
+			// proofGenerated, err := a.tryGenerateBatchProof(ctx, prover)
 			// if err != nil {
-			// 	log.Errorf("Error trying to aggregate proofs: %v", err)
-			// }
-			// if !proofGenerated {
-			// 	proofGenerated, err = a.tryGenerateBatchProof(ctx, prover)
-			// 	if err != nil {
-			// 		log.Errorf("Error trying to generate proof: %v", err)
-			// 	}
+			// 	log.Errorf("Error trying to generate proof: %v", err)
 			// }
 			// if !proofGenerated {
 			// 	// if no proof was generated (aggregated or batch) wait some time before retry
 			// 	time.Sleep(a.cfg.RetryTime.Duration)
 			// } // if proof was generated we retry immediately as probably we have more proofs to process
+
+			proofGenerated, err := a.tryAggregateProofs(ctx, prover)
+			if err != nil {
+				log.Errorf("Error trying to aggregate proofs: %v", err)
+			}
+			if !proofGenerated {
+				proofGenerated, err = a.tryGenerateBatchProof(ctx, prover)
+				if err != nil {
+					log.Errorf("Error trying to generate proof: %v", err)
+				}
+			}
+			if !proofGenerated {
+				// if no proof was generated (aggregated or batch) wait some time before retry
+				time.Sleep(a.cfg.RetryTime.Duration)
+			} // if proof was generated we retry immediately as probably we have more proofs to process
 		}
 	}
 }
@@ -475,13 +487,20 @@ func (a *Aggregator) monitorSendProof(batchNumberFinal uint64) {
 		case <-a.ctx.Done():
 			return
 		case <-tick.C:
-			block, err := a.State.GetLastBlock(a.ctx, nil)
+
+			// block, err := a.State.GetLastBlock(a.ctx, nil)
+			// if err != nil {
+			// 	log.Errorf("Failed get last block in monitorSendProof: %v", err)
+			// 	continue
+			// }
+
+			blockNumber, err := a.Ethman.GetLatestBlockNumber(a.ctx)
 			if err != nil {
-				log.Errorf("Failed get last block in monitorSendProof: %v", err)
+				log.Errorf("Failed get last block by jsonrpc: %v", err)
 				continue
 			}
 
-			hash, err := a.State.GetProofHashBySender(a.ctx, a.cfg.SenderAddress, batchNumberFinal, max_commit_proof, block.BlockNumber, nil)
+			hash, err := a.State.GetProofHashBySender(a.ctx, a.cfg.SenderAddress, batchNumberFinal, max_commit_proof, blockNumber, nil)
 			if err != nil {
 				log.Errorf("Failed get proof hash in monitorSendProof: %v", err)
 				continue

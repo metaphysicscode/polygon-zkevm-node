@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	"context"
+
 	common "github.com/ethereum/go-ethereum/common"
 	mock "github.com/stretchr/testify/mock"
 
@@ -14,7 +16,7 @@ type Etherman struct {
 	mock.Mock
 }
 
-func (_m *Etherman) BuildProofHashTxData(lastVerifiedBatch, newVerifiedBatch uint64, proofHash common.Hash) (to *common.Address, data []byte, err error) {
+func (_m *Etherman)BuildProofHashTxData(lastVerifiedBatch, newVerifiedBatch uint64, proofHash common.Hash) (to *common.Address, data []byte, err error) {
 	ret := _m.Called(lastVerifiedBatch, newVerifiedBatch, proofHash)
 
 	var r0 *common.Address
@@ -166,6 +168,14 @@ func (_m *Etherman) TrustedAggregator() (common.Address, error) {
 	}
 
 	return r0, r1
+}
+
+func (_m *Etherman) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
+	return 1, nil
+}
+
+func (_m *Etherman)  JudgeAggregatorDeposit(account common.Address) (bool, error) {
+	return  true,nil
 }
 
 type mockConstructorTestingTNewEtherman interface {

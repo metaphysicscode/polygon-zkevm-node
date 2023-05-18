@@ -75,6 +75,7 @@ type stateInterface interface {
 	CountReorgs(ctx context.Context, dbTx pgx.Tx) (uint64, error)
 	GetLatestGer(ctx context.Context, maxBlockNumber uint64) (state.GlobalExitRoot, time.Time, error)
 	FlushMerkleTree(ctx context.Context) error
+	GetSequenceLastCommitBlock(ctx context.Context, owner string, dbTx pgx.Tx) (string, uint64, error)
 }
 
 type workerInterface interface {

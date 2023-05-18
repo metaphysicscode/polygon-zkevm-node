@@ -2089,6 +2089,51 @@ func (p *PostgresStorage) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx)
 	)
 
 	// TODO: add comments to explain the query
+	// const getProofsToAggregateSQL = `
+	// 	SELECT
+	// 		p1.batch_num as p1_batch_num,
+	// 		p1.batch_num_final as p1_batch_num_final,
+	// 		p1.proof as p1_proof,
+	// 		p1.proof_id as p1_proof_id,
+	// 		p1.input_prover as p1_input_prover,
+	// 		p1.prover as p1_prover,
+	// 		p1.prover_id as p1_prover_id,
+	// 		p1.generating_since as p1_generating_since,
+	// 		p1.created_at as p1_created_at,
+	// 		p1.updated_at as p1_updated_at,
+	// 		p2.batch_num as p2_batch_num,
+	// 		p2.batch_num_final as p2_batch_num_final,
+	// 		p2.proof as p2_proof,
+	// 		p2.proof_id as p2_proof_id,
+	// 		p2.input_prover as p2_input_prover,
+	// 		p2.prover as p2_prover,
+	// 		p2.prover_id as p2_prover_id,
+	// 		p2.generating_since as p2_generating_since,
+	// 		p2.created_at as p2_created_at,
+	// 		p2.updated_at as p2_updated_at
+	// 	FROM state.proof p1 INNER JOIN state.proof p2 ON p1.batch_num_final = p2.batch_num - 1
+	// 	WHERE p1.generating_since IS NULL AND p2.generating_since IS NULL AND
+	// 	 	  p1.proof IS NOT NULL AND p2.proof IS NOT NULL AND
+	// 		  (
+	// 				EXISTS (
+	// 				SELECT 1 FROM state.sequences s
+	// 				WHERE p1.batch_num >= s.from_batch_num AND p1.batch_num <= s.to_batch_num AND
+	// 					p1.batch_num_final >= s.from_batch_num AND p1.batch_num_final <= s.to_batch_num AND
+	// 					p2.batch_num >= s.from_batch_num AND p2.batch_num <= s.to_batch_num AND
+	// 					p2.batch_num_final >= s.from_batch_num AND p2.batch_num_final <= s.to_batch_num
+	// 				)
+	// 				OR
+	// 				(
+	// 					EXISTS ( SELECT 1 FROM state.sequences s WHERE p1.batch_num = s.from_batch_num) AND
+	// 					EXISTS ( SELECT 1 FROM state.sequences s WHERE p1.batch_num_final = s.to_batch_num) AND
+	// 					EXISTS ( SELECT 1 FROM state.sequences s WHERE p2.batch_num = s.from_batch_num) AND
+	// 					EXISTS ( SELECT 1 FROM state.sequences s WHERE p2.batch_num_final = s.to_batch_num)
+	// 				)
+	// 			)
+	// 	ORDER BY p1.batch_num ASC
+	// 	LIMIT 1
+	// 	`
+
 	const getProofsToAggregateSQL = `
 		SELECT 
 			p1.batch_num as p1_batch_num, 
@@ -2121,13 +2166,6 @@ func (p *PostgresStorage) GetProofsToAggregate(ctx context.Context, dbTx pgx.Tx)
 						p1.batch_num_final >= s.from_batch_num AND p1.batch_num_final <= s.to_batch_num AND
 						p2.batch_num >= s.from_batch_num AND p2.batch_num <= s.to_batch_num AND
 						p2.batch_num_final >= s.from_batch_num AND p2.batch_num_final <= s.to_batch_num
-					)
-					OR
-					(
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p1.batch_num = s.from_batch_num) AND
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p1.batch_num_final = s.to_batch_num) AND
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p2.batch_num = s.from_batch_num) AND
-						EXISTS ( SELECT 1 FROM state.sequences s WHERE p2.batch_num_final = s.to_batch_num)
 					)
 				)
 		ORDER BY p1.batch_num ASC
@@ -2413,4 +2451,20 @@ func (p *PostgresStorage) GetProverProofByHash(ctx context.Context, hash string,
 		Proof:         proof,
 		ProofHash:     common.HexToHash(hash),
 	}, nil
+}
+
+func (p *PostgresStorage) GetSequenceLastCommitBlock(ctx context.Context, owner string, dbTx pgx.Tx) (string, uint64, error) {
+	e := p.getExecQuerier(dbTx)
+	cmd := `SELECT id, COALESCE(block_num, 0) FROM state.monitored_txs where owner = $1 and status = 'sent'`
+	var blockNumber uint64
+	var id string
+	err := e.QueryRow(ctx, cmd, owner).Scan(&id, &blockNumber)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", 0, ErrNotFound
+	} else if err != nil {
+		return "", 0, err
+	}
+
+	return id, blockNumber, nil
 }

@@ -38,6 +38,19 @@ func (s *Sequencer) tryToSendSequence(ctx context.Context, ticker *time.Ticker) 
 		return
 	}
 
+	id, block, err := s.state.GetSequenceLastCommitBlock(ctx, ethTxManagerOwner, nil)
+	if err != nil && err != state.ErrNotFound {
+		log.Errorf("failed to get sequence list commit block. err: %v", err)
+		waitTick(ctx, ticker)
+		return
+	}
+
+	if err != state.ErrNotFound && block == 0 {
+		log.Infof("walt for save batchs to block. id = %s", id)
+		waitTick(ctx, ticker)
+		return
+	}
+
 	// Check if synchronizer is up to date
 	if !s.isSynced(ctx) {
 		log.Info("wait for synchronizer to sync last batch")
