@@ -297,32 +297,32 @@ func (a *Aggregator) sendFinalProof() {
 					continue
 				}
 
-				proofHashBlockNum, err := a.State.GetEarlyProofHashByNumber(a.ctx, proof.BatchNumberFinal, nil)
-				if err != nil {
-					log.Errorf("Error get early proof hash: %v", err)
-					a.endProofHash()
-					a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
-					continue
-				}
+				//proofHashBlockNum, err := a.State.GetEarlyProofHashByNumber(a.ctx, proof.BatchNumberFinal, nil)
+				//if err != nil {
+				//	log.Errorf("Error get early proof hash: %v", err)
+				//	a.endProofHash()
+				//	a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+				//	continue
+				//}
 				sender := common.HexToAddress(a.cfg.SenderAddress)
-				aggregator, err := a.Ethman.TrustedAggregator()
-				if err != nil {
-					log.Errorf("Failed to get trusted aggregator address, err %v", err)
-					continue
-				}
-				if sender.String() != aggregator.String() && proofHashBlockNum > 0 {
-					block, err := a.State.GetLastBlock(a.ctx, nil)
-					if err != nil {
-						log.Errorf("Error get last block: %v", err)
-						a.endProofHash()
-						a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
-						continue
-					}
-
-					if (block.BlockNumber - proofHashBlockNum) > max_commit_proof {
-						continue
-					}
-				}
+				//aggregator, err := a.Ethman.TrustedAggregator()
+				//if err != nil {
+				//	log.Errorf("Failed to get trusted aggregator address, err %v", err)
+				//	continue
+				//}
+				//if sender.String() != aggregator.String() && proofHashBlockNum > 0 {
+				//	block, err := a.State.GetLastBlock(a.ctx, nil)
+				//	if err != nil {
+				//		log.Errorf("Error get last block: %v", err)
+				//		a.endProofHash()
+				//		a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+				//		continue
+				//	}
+				//
+				//	if (block.BlockNumber - proofHashBlockNum) > max_commit_proof {
+				//		continue
+				//	}
+				//}
 
 				// query
 				to, data, err := a.Ethman.BuildProofHashTxData(proof.BatchNumber-1, proof.BatchNumberFinal, hash)
@@ -401,8 +401,6 @@ func (a *Aggregator) sendFinalProof() {
 					//todo: when tx is failded ,how to get LastPendingState
 				}
 			}, nil)
-
-			log.Errorf("------------------ ", sender.String(), aggregator.String())
 
 			if sender.String() != aggregator.String() {
 				to, data, err = a.Ethman.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
