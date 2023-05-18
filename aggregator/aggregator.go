@@ -1,7 +1,6 @@
 package aggregator
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -403,7 +402,9 @@ func (a *Aggregator) sendFinalProof() {
 				}
 			}, nil)
 
-			if !bytes.Equal(sender.Bytes(), aggregator.Bytes()) {
+			log.Errorf("------------------ ", sender.String(), aggregator.String())
+
+			if sender.String() != aggregator.String() {
 				to, data, err = a.Ethman.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
 				if err != nil {
 					log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
