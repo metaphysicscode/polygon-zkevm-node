@@ -1295,7 +1295,8 @@ func (hc *healthChecker) Watch(req *grpchealth.HealthCheckRequest, server grpche
 func (a *Aggregator) handleMonitoredTxResult(result ethtxmanager.MonitoredTxResult) {
 	resLog := log.WithFields("owner", ethTxManagerOwner, "txId", result.ID)
 	if result.Status == ethtxmanager.MonitoredTxStatusFailed {
-		resLog.Fatal("failed to send batch verification, TODO: review this fatal and define what to do in this case")
+		//resLog.Fatal("failed to send batch verification, TODO: review this fatal and define what to do in this case")
+		return
 	}
 
 	// monitoredIDFormat: "proof-from-%v-to-%v"
