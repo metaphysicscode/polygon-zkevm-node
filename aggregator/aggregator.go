@@ -305,7 +305,13 @@ func (a *Aggregator) sendFinalProof() {
 					a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 					continue
 				}
-				if proofHashBlockNum > 0 {
+				sender := common.HexToAddress(a.cfg.SenderAddress)
+				aggregator, err := a.Ethman.TrustedAggregator()
+				if err != nil {
+					log.Errorf("Failed to get trusted aggregator address, err %v", err)
+					continue
+				}
+				if sender.String() != aggregator.String() && proofHashBlockNum > 0 {
 					block, err := a.State.GetLastBlock(a.ctx, nil)
 					if err != nil {
 						log.Errorf("Error get last block: %v", err)
@@ -328,7 +334,6 @@ func (a *Aggregator) sendFinalProof() {
 					continue
 				}
 
-				sender := common.HexToAddress(a.cfg.SenderAddress)
 				monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proof.BatchNumber, proof.BatchNumberFinal)
 				err = a.EthTxManager.Add(ctx, ethTxManagerOwner, monitoredTxID, sender, to, nil, data, nil)
 				if err != nil {
