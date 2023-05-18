@@ -642,19 +642,21 @@ func (etherMan *Client) BuildUnTrustedVerifyBatchesTxData(lastVerifiedBatch, new
 		return nil, nil, fmt.Errorf("failed to get LastPendingState, err: %w", err)
 	}
 
-	for {
-		transitions, err := etherMan.PoE.PendingStateTransitions(&bind.CallOpts{Pending: false}, big.NewInt(0).SetUint64(pendStateNum))
+	if pendStateNum != 0 {
+		for {
+			transitions, err := etherMan.PoE.PendingStateTransitions(&bind.CallOpts{Pending: false}, big.NewInt(0).SetUint64(pendStateNum))
 
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get PendingStateTransitions, err: %w", err)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get PendingStateTransitions, err: %w", err)
+			}
+			if transitions.LastVerifiedBatch == lastVerifiedBatch {
+				break
+			}
+			if transitions.LastVerifiedBatch > lastVerifiedBatch {
+				return nil, nil, errors.New("contract LastVerifybattch bagger than local")
+			}
+			pendStateNum++
 		}
-		if transitions.LastVerifiedBatch == lastVerifiedBatch {
-			break
-		}
-		if transitions.LastVerifiedBatch > lastVerifiedBatch {
-			return nil, nil, errors.New("contract LastVerifybattch bagger than local")
-		}
-		pendStateNum++
 	}
 
 	//const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature

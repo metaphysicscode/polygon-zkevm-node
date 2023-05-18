@@ -294,7 +294,8 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 
 			// if the tx was mined but failed, we continue to consider it was not mined
 			// and store the failed receipt to be used to check if nonce needs to be reviewed
-			mined = false
+			//mined = false
+			mined = true
 			hasFailedReceipts = true
 		}
 
