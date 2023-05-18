@@ -338,6 +338,20 @@ func (a *Aggregator) sendFinalProof() {
 				if err != nil {
 					log := log.WithFields("tx", monitoredTxID)
 					log.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
+
+					if err := a.State.AddProverProof(a.ctx, &state.ProverProof{
+						InitNumBatch:  proof.BatchNumber,
+						FinalNewBatch: proof.BatchNumberFinal,
+						NewStateRoot:  finalBatch.StateRoot,
+						LocalExitRoot: finalBatch.LocalExitRoot,
+						Proof:         msg.finalProof.Proof,
+						ProofHash:     hash,
+					}, nil); err != nil {
+						log := log.WithFields("tx", monitoredTxID)
+						log.Errorf("Error to add prover proof to db: %v", err)
+						continue
+					}
+
 					continue
 				}
 
