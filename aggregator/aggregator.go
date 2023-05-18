@@ -351,7 +351,7 @@ func (a *Aggregator) sendFinalProof() {
 						log.Errorf("Error to add prover proof to db: %v", err)
 						continue
 					}
-
+					go a.monitorSendProof(proof.BatchNumberFinal)
 					continue
 				}
 
