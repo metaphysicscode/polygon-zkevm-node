@@ -637,11 +637,8 @@ func (etherMan *Client) BuildUnTrustedVerifyBatchesTxData(lastVerifiedBatch, new
 		return nil, nil, fmt.Errorf("failed to decode proof, err: %w", err)
 	}
 
-	const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
-
 	tx, err := etherMan.PoE.VerifyBatches(
 		&opts,
-		pendStateNum,
 		lastVerifiedBatch,
 		newVerifiedBatch,
 		newLocalExitRoot,
@@ -683,9 +680,8 @@ func (etherMan *Client) BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVe
 
 	const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
 
-	tx, err := etherMan.PoE.VerifyBatchesTrustedAggregator(
+	tx, err := etherMan.PoE.VerifyBatches(
 		&opts,
-		pendStateNum,
 		lastVerifiedBatch,
 		newVerifiedBatch,
 		newLocalExitRoot,
