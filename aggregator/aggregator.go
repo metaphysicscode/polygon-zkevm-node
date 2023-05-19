@@ -1,7 +1,6 @@
 package aggregator
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -305,32 +304,32 @@ func (a *Aggregator) sendFinalProof() {
 					continue
 				}
 
-				proofHashBlockNum, err := a.State.GetEarlyProofHashByNumber(a.ctx, proof.BatchNumberFinal, nil)
-				if err != nil {
-					log.Errorf("Error get early proof hash: %v", err)
-					a.endProofHash()
-					a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
-					continue
-				}
+				//proofHashBlockNum, err := a.State.GetEarlyProofHashByNumber(a.ctx, proof.BatchNumberFinal, nil)
+				//if err != nil {
+				//	log.Errorf("Error get early proof hash: %v", err)
+				//	a.endProofHash()
+				//	a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+				//	continue
+				//}
 				sender := common.HexToAddress(a.cfg.SenderAddress)
-				aggregator, err := a.Ethman.TrustedAggregator()
-				if err != nil {
-					log.Errorf("Failed to get trusted aggregator address, err %v", err)
-					continue
-				}
-				if sender.String() != aggregator.String() && proofHashBlockNum > 0 {
-					block, err := a.State.GetLastBlock(a.ctx, nil)
-					if err != nil {
-						log.Errorf("Error get last block: %v", err)
-						a.endProofHash()
-						a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
-						continue
-					}
-
-					if (block.BlockNumber - proofHashBlockNum) > max_commit_proof {
-						continue
-					}
-				}
+				//aggregator, err := a.Ethman.TrustedAggregator()
+				//if err != nil {
+				//	log.Errorf("Failed to get trusted aggregator address, err %v", err)
+				//	continue
+				//}
+				//if sender.String() != aggregator.String() && proofHashBlockNum > 0 {
+				//	block, err := a.State.GetLastBlock(a.ctx, nil)
+				//	if err != nil {
+				//		log.Errorf("Error get last block: %v", err)
+				//		a.endProofHash()
+				//		a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+				//		continue
+				//	}
+				//
+				//	if (block.BlockNumber - proofHashBlockNum) > max_commit_proof {
+				//		continue
+				//	}
+				//}
 
 				// query
 				to, data, err := a.Ethman.BuildProofHashTxData(proof.BatchNumber-1, proof.BatchNumberFinal, hash)
@@ -346,6 +345,20 @@ func (a *Aggregator) sendFinalProof() {
 				if err != nil {
 					log := log.WithFields("tx", monitoredTxID)
 					log.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
+
+					//if err := a.State.AddProverProof(a.ctx, &state.ProverProof{
+					//	InitNumBatch:  proof.BatchNumber,
+					//	FinalNewBatch: proof.BatchNumberFinal,
+					//	NewStateRoot:  finalBatch.StateRoot,
+					//	LocalExitRoot: finalBatch.LocalExitRoot,
+					//	Proof:         msg.finalProof.Proof,
+					//	ProofHash:     hash,
+					//}, nil); err != nil {
+					//	log := log.WithFields("tx", monitoredTxID)
+					//	log.Errorf("Error to add prover proof to db: %v", err)
+					//	continue
+					//}
+					//go a.monitorSendProof(proof.BatchNumberFinal)
 					continue
 				}
 
@@ -396,34 +409,14 @@ func (a *Aggregator) sendFinalProof() {
 
 			// add batch verification to be monitored
 			sender := common.HexToAddress(a.cfg.SenderAddress)
-			aggregator, err := a.Ethman.TrustedAggregator()
+
+			to, data, err := a.Ethman.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
 			if err != nil {
-				log.Errorf("Failed to get trusted aggregator address, err %v", err)
+				log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
+				//a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 				continue
 			}
 
-			var to *common.Address
-			var data []byte
-			a.EthTxManager.ProcessPendingMonitoredTxs(a.ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
-				if result.Status == ethtxmanager.MonitoredTxStatusFailed {
-					//todo: when tx is failded ,how to get LastPendingState
-				}
-			}, nil)
-
-			if !bytes.Equal(sender.Bytes(), aggregator.Bytes()) {
-				to, data, err = a.Ethman.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
-				if err != nil {
-					log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
-					//a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
-					continue
-				}
-			} else {
-				to, data, err = a.Ethman.BuildTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
-				if err != nil {
-					log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
-					continue
-				}
-			}
 			monitoredTxID := buildMonitoredTxID(proverProof.InitNumBatch, proverProof.FinalNewBatch)
 			err = a.EthTxManager.Add(a.ctx, ethTxManagerOwner, monitoredTxID, sender, to, nil, data, nil)
 			if err != nil {
@@ -1290,6 +1283,7 @@ func (a *Aggregator) handleMonitoredTxResult(result ethtxmanager.MonitoredTxResu
 	resLog := log.WithFields("owner", ethTxManagerOwner, "txId", result.ID)
 	if result.Status == ethtxmanager.MonitoredTxStatusFailed {
 		resLog.Fatal("failed to send batch verification, TODO: review this fatal and define what to do in this case")
+		return
 	}
 
 	// monitoredIDFormat: "proof-from-%v-to-%v"
