@@ -295,7 +295,7 @@ func (a *Aggregator) sendFinalProof() {
 
 			sha3 := solsha3.SoliditySHA3(msg.finalProof.Proof)
 
-			pack := solsha3.Pack([]string{"bytes", "address"}, []interface{}{
+			pack := solsha3.Pack([]string{"string", "address"}, []interface{}{
 				sha3,
 				common.HexToAddress(a.cfg.SenderAddress),
 			})
