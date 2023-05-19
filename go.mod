@@ -144,5 +144,6 @@ require (
 
 require (
 	github.com/imdario/mergo v0.3.13 // indirect
+	github.com/miguelmota/go-solidity-sha3 v0.1.1
 	github.com/prometheus/client_golang v1.14.0
 )

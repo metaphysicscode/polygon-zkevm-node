@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	solsha3 "github.com/miguelmota/go-solidity-sha3"
 )
 
 const (
@@ -285,7 +286,13 @@ func (a *Aggregator) sendFinalProof() {
 			ctx := a.ctx
 			proof := msg.recursiveProof
 			log.WithFields("proofId", proof.ProofID, "batches", fmt.Sprintf("%d-%d", proof.BatchNumber, proof.BatchNumberFinal))
-			hash := crypto.Keccak256Hash([]byte(msg.finalProof.Proof + a.cfg.SenderAddress))
+
+			pack := solsha3.Pack([]string{"bytes", "address"}, []interface{}{
+				msg.finalProof.Proof,
+				common.HexToAddress(a.cfg.SenderAddress),
+			})
+
+			hash := crypto.Keccak256Hash(pack)
 			proverProof, err := a.State.GetProverProofByHash(a.ctx, hash.String(), proof.BatchNumberFinal, nil)
 			log.Infof("hash = %s, proverProof = %v", hash.String(), proverProof)
 			if err != nil || proverProof == nil {
