@@ -286,8 +286,17 @@ func (a *Aggregator) sendFinalProof() {
 			proof := msg.recursiveProof
 			log.WithFields("proofId", proof.ProofID, "batches", fmt.Sprintf("%d-%d", proof.BatchNumber, proof.BatchNumberFinal))
 
+			//a := solsha3.SoliditySHA3(proof)
+			//// address := common.HexToAddress("0xf191e3925788b24e54324997d3a016a2f067998b")
+			//ha := solsha3.Pack([]string{"string", "address"}, []interface{}{
+			//	a,
+			//	common.HexToAddress("0xf191e3925788b24e54324997d3a016a2f067998b")},
+			//)
+
+			sha3 := solsha3.SoliditySHA3(msg.finalProof.Proof)
+
 			pack := solsha3.Pack([]string{"bytes", "address"}, []interface{}{
-				msg.finalProof.Proof,
+				sha3,
 				common.HexToAddress(a.cfg.SenderAddress),
 			})
 
