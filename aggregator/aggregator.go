@@ -339,19 +339,19 @@ func (a *Aggregator) sendFinalProof() {
 					log := log.WithFields("tx", monitoredTxID)
 					log.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
 
-					if err := a.State.AddProverProof(a.ctx, &state.ProverProof{
-						InitNumBatch:  proof.BatchNumber,
-						FinalNewBatch: proof.BatchNumberFinal,
-						NewStateRoot:  finalBatch.StateRoot,
-						LocalExitRoot: finalBatch.LocalExitRoot,
-						Proof:         msg.finalProof.Proof,
-						ProofHash:     hash,
-					}, nil); err != nil {
-						log := log.WithFields("tx", monitoredTxID)
-						log.Errorf("Error to add prover proof to db: %v", err)
-						continue
-					}
-					go a.monitorSendProof(proof.BatchNumberFinal)
+					//if err := a.State.AddProverProof(a.ctx, &state.ProverProof{
+					//	InitNumBatch:  proof.BatchNumber,
+					//	FinalNewBatch: proof.BatchNumberFinal,
+					//	NewStateRoot:  finalBatch.StateRoot,
+					//	LocalExitRoot: finalBatch.LocalExitRoot,
+					//	Proof:         msg.finalProof.Proof,
+					//	ProofHash:     hash,
+					//}, nil); err != nil {
+					//	log := log.WithFields("tx", monitoredTxID)
+					//	log.Errorf("Error to add prover proof to db: %v", err)
+					//	continue
+					//}
+					//go a.monitorSendProof(proof.BatchNumberFinal)
 					continue
 				}
 
@@ -1295,7 +1295,7 @@ func (hc *healthChecker) Watch(req *grpchealth.HealthCheckRequest, server grpche
 func (a *Aggregator) handleMonitoredTxResult(result ethtxmanager.MonitoredTxResult) {
 	resLog := log.WithFields("owner", ethTxManagerOwner, "txId", result.ID)
 	if result.Status == ethtxmanager.MonitoredTxStatusFailed {
-		//resLog.Fatal("failed to send batch verification, TODO: review this fatal and define what to do in this case")
+		resLog.Fatal("failed to send batch verification, TODO: review this fatal and define what to do in this case")
 		return
 	}
 

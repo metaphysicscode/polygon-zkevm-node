@@ -637,29 +637,7 @@ func (etherMan *Client) BuildUnTrustedVerifyBatchesTxData(lastVerifiedBatch, new
 		return nil, nil, fmt.Errorf("failed to decode proof, err: %w", err)
 	}
 
-	pendStateNum, err := etherMan.PoE.LastPendingState(&bind.CallOpts{Pending: false})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get LastPendingState, err: %w", err)
-	}
-
-	if pendStateNum != 0 {
-		for {
-			transitions, err := etherMan.PoE.PendingStateTransitions(&bind.CallOpts{Pending: false}, big.NewInt(0).SetUint64(pendStateNum))
-
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to get PendingStateTransitions, err: %w", err)
-			}
-			if transitions.LastVerifiedBatch == lastVerifiedBatch {
-				break
-			}
-			if transitions.LastVerifiedBatch > lastVerifiedBatch {
-				return nil, nil, errors.New("contract LastVerifybattch bagger than local")
-			}
-			pendStateNum++
-		}
-	}
-
-	//const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
+	const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
 
 	tx, err := etherMan.PoE.VerifyBatches(
 		&opts,
@@ -703,26 +681,7 @@ func (etherMan *Client) BuildTrustedVerifyBatchesTxData(lastVerifiedBatch, newVe
 		return nil, nil, fmt.Errorf("failed to decode proof, err: %w", err)
 	}
 
-	pendStateNum, err := etherMan.PoE.LastPendingState(&bind.CallOpts{Pending: false})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get LastPendingState, err: %w", err)
-	}
-
-	//const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
-	for {
-		transitions, err := etherMan.PoE.PendingStateTransitions(&bind.CallOpts{Pending: false}, big.NewInt(0).SetUint64(pendStateNum))
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get PendingStateTransitions, err: %w", err)
-		}
-		if transitions.LastVerifiedBatch == lastVerifiedBatch {
-			break
-		}
-		if transitions.LastVerifiedBatch > lastVerifiedBatch {
-			return nil, nil, errors.New("contract LastVerifybattch bagger than local")
-		}
-		pendStateNum++
-	}
+	const pendStateNum = 0 // TODO hardcoded for now until we implement the pending state feature
 
 	tx, err := etherMan.PoE.VerifyBatchesTrustedAggregator(
 		&opts,
