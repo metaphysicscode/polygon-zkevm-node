@@ -292,9 +292,7 @@ func (a *Aggregator) sendFinalProof() {
 			//	a,
 			//	common.HexToAddress("0xf191e3925788b24e54324997d3a016a2f067998b")},
 			//)
-
 			sha3 := solsha3.SoliditySHA3(msg.finalProof.Proof)
-
 			pack := solsha3.Pack([]string{"string", "address"}, []interface{}{
 				sha3,
 				common.HexToAddress(a.cfg.SenderAddress),
@@ -368,6 +366,8 @@ func (a *Aggregator) sendFinalProof() {
 					//	continue
 					//}
 					//go a.monitorSendProof(proof.BatchNumberFinal)
+					a.endProofHash()
+					a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 					continue
 				}
 
@@ -388,6 +388,8 @@ func (a *Aggregator) sendFinalProof() {
 				}, nil); err != nil {
 					log := log.WithFields("tx", monitoredTxID)
 					log.Errorf("Error to add prover proof to db: %v", err)
+					a.endProofHash()
+					a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 					continue
 				}
 
@@ -423,6 +425,7 @@ func (a *Aggregator) sendFinalProof() {
 			if err != nil {
 				log.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
 				//a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+				a.endProofVerification()
 				continue
 			}
 
@@ -431,6 +434,7 @@ func (a *Aggregator) sendFinalProof() {
 			if err != nil {
 				log := log.WithFields("tx", monitoredTxID)
 				log.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
+				a.endProofVerification()
 				continue
 			}
 
