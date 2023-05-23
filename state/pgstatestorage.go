@@ -2412,27 +2412,12 @@ func (p *PostgresStorage) AddProverProof(ctx context.Context, proverProof *Prove
 }
 
 func (p *PostgresStorage) GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error) {
-	/*var proofHash string
-	const getBatchByNumberSQL = `SELECT proof_hash FROM state.proof_hash WHERE final_new_batch = $1 and lower(sender) = lower($2) and (block_num + $3) < $4`
-
-	e := p.getExecQuerier(dbTx)
-	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber, sender, minCommit, lastBlockNumber).Scan(&proofHash)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
-	} else if err != nil {
-		return "", err
-	}
-
-	return proofHash, nil
-	*/
-
 	var proofHash string
 	var blockNum uint64
-	const getBatchByNumberSQL = `SELECT proof_hash, block_num FROM state.proof_hash WHERE final_new_batch = $1 order by block_num limit 1`
+	const getProofHashSQL = `SELECT proof_hash, block_num FROM state.proof_hash WHERE final_new_batch = $1 order by block_num limit 1`
 
 	e := p.getExecQuerier(dbTx)
-	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber).Scan(&proofHash, &blockNum)
+	err := e.QueryRow(ctx, getProofHashSQL, batchNumber).Scan(&proofHash, &blockNum)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
@@ -2444,7 +2429,29 @@ func (p *PostgresStorage) GetProofHashBySender(ctx context.Context, sender strin
 		return "", ErrNotFound
 	}
 
+	const getBatchByNumberSQL = `SELECT proof_hash FROM state.proof_hash WHERE final_new_batch = $1 and lower(sender) = lower($2)`
+
+	err = e.QueryRow(ctx, getBatchByNumberSQL, batchNumber, sender).Scan(&proofHash)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	} else if err != nil {
+		return "", err
+	}
+
 	return proofHash, nil
+}
+
+func (p *PostgresStorage) IsGenerateProofHash(ctx context.Context, sender string, batchNumber uint64, dbTx pgx.Tx) (bool, error) {
+	const isGenerateProofHashSQL = `SELECT count(1) FROM state.proof_hash WHERE final_new_batch = $1 and lower(sender) = lower($2)`
+	e := p.getExecQuerier(dbTx)
+	var num uint64
+	err := e.QueryRow(ctx, isGenerateProofHashSQL, batchNumber, sender).Scan(&num)
+	if err != nil || num == 0 {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (p *PostgresStorage) GetProverProofByHash(ctx context.Context, hash string, batchNumberFinal uint64, dbTx pgx.Tx) (*ProverProof, error) {

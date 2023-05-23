@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,14 +14,19 @@ import (
 	"github.com/0xPolygonHermez/zkevm-node/aggregator/mocks"
 	"github.com/0xPolygonHermez/zkevm-node/aggregator/pb"
 	configTypes "github.com/0xPolygonHermez/zkevm-node/config/types"
+	"github.com/0xPolygonHermez/zkevm-node/encoding"
 	ethmanTypes "github.com/0xPolygonHermez/zkevm-node/etherman/types"
 	"github.com/0xPolygonHermez/zkevm-node/ethtxmanager"
 	"github.com/0xPolygonHermez/zkevm-node/state"
 	"github.com/0xPolygonHermez/zkevm-node/test/testutils"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	solsha3 "github.com/miguelmota/go-solidity-sha3"
 )
 
 type mox struct {
@@ -27,6 +34,101 @@ type mox struct {
 	ethTxManager *mocks.EthTxManager
 	etherman     *mocks.Etherman
 	proverMock   *mocks.ProverMock
+}
+
+func convertType(args []byte) [32]byte {
+	result := [32]byte{}
+	for i := 0; i < len(args); i++ {
+		result[i] = args[i]
+	}
+	return result
+}
+
+func TestProofHash(t *testing.T) {
+	str := "0x20227cbcef731b6cbdc0edd5850c63dc7fbc27fb58d12cd4d08298799cf66a0512c230867d3375a1f4669e7267dad2c31ebcddbaccea6abd67798ceae35ae7611c665b6069339e6812d015e239594aa71c4e217288e374448c358f6459e057c91ad2ef514570b5dea21508e214430daadabdd23433820000fe98b1c6fa81d5c512b86fbf87bd7102775f8ef1da7e8014dc7aab225503237c7927c032e589e9a01a0eab9fda82ffe834c2a4977f36cc9bcb1f2327bdac5fb48ffbeb9656efcdf70d2656c328903e9fb96e4e3f470c447b3053cc68d68cf0ad317fe10aa7f254222e47ea07f3c1c3aacb74e5926a67262f261c1ed3120576ab877b49a81fb8aac51431858662af6b1a8138a44e9d0812d032340369459ccc98b109347cc874c7202dceecc3dbb09d7f9e5658f1ca3a92d22be1fa28f9945205d853e2c866d9b649301ac9857b07b92e4865283d3d5e2b711ea5f85cb2da71965382ece050508d3d008bbe4df5458f70bd3e1bfcc50b34222b43cd28cbe39a3bab6e464664a742161df99c607638e415ced49d0cd719518539ed5f561f81d07fe40d3ce85508e0332465313e60ad9ae271d580022ffca4fbe4d72d38d18e7a6e20d020a1d1e5a8f411291ab95521386fa538ddfe6a391d4a3669cc64c40f07895f031550b32f7d73205a69c214a8ef3cdf996c495e3fd24c00873f30ea6b2bfabfd38de1c3da357d1fefe203573fdad22f675cb5cfabbec0a041b1b31274f70193da8e90cfc4d6dc054c7cd26d09c1dadd064ec52b6ddcfa0cb144d65d9e131c0c88f8004f90d363034d839aa7760167b5302c36d2c2f6714b41782070b10c51c178bd923182d28502f36e19b079b190008c46d19c399331fd60b6b6bde898bd1dd0a71ee7ec7ff7124cc3d374846614389e7b5975b77c4059bc42b810673dbb6f8b951e5b636bdf24afd2a3cbe96ce8600e8a79731b4a56c697596e0bff7b73f413bdbc75069b002b00d713fae8d6450428246f1b794d56717050fdb77bbe094ac2ee6af54a153e2fb8ce1d31a86c4fdd523783b910bedf7db58a46ba6ce48ac3ca194f3cf2275e"
+	proof, err := encoding.DecodeBytes(&str)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := solsha3.SoliditySHA3(
+		[]string{"string", "address"},
+		[]interface{}{
+			str,
+			"0xf191e3925788b24e54324997d3a016a2f067998b",
+		},
+	)
+
+	fmt.Println(crypto.Keccak256Hash(h))
+	a := solsha3.SoliditySHA3(proof)
+	// address := common.HexToAddress("0xf191e3925788b24e54324997d3a016a2f067998b")
+	ha := solsha3.Pack([]string{"string", "address"}, []interface{}{
+		a,
+		common.HexToAddress("0xf191e3925788b24e54324997d3a016a2f067998b")},
+	)
+
+	//0x664080a81c53d2f2ddacf9c13c9ce515cd87d4c9daab9229fd0fdd1cad05221c
+	hash1 := crypto.Keccak256Hash(ha)
+	fmt.Println(hash1.Hex())
+	// fmt.Println(hex.EncodeToString(ha))
+
+	abiString := `
+		[
+			{
+				"inputs": [
+					{
+						"internalType": "bytes",
+						"name": "proof",
+						"type": "bytes"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					}
+				],
+				"name": "proofHash",
+				"outputs": [],
+				"stateMutability": "pure",
+				"type": "function"
+			}
+			]`
+
+	contractAbi, err := abi.JSON(strings.NewReader(abiString))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bytes, err := contractAbi.Pack("proofHash",
+		a,
+		common.HexToAddress("0xf191e3925788b24e54324997d3a016a2f067998b"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bytes = bytes[4:]
+	hash := crypto.Keccak256Hash(bytes)
+	fmt.Println(hash.Hex())
+
+	// addressTy, err := abi.NewType("address", "address", nil)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// proofTy, err := abi.NewType("bytes", "bytes", nil)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// arguments := abi.Arguments{{Type: proofTy}, {Type: addressTy}}
+	// msgB, err := arguments.Pack(proof, common.HexToAddress("0xf191e3925788b24e54324997d3a016a2f067998b"))
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// msg := "0x" + hex.EncodeToString(msgB)
+	// msg = fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(msg), msg)
+	// t.Fatal(crypto.Keccak256Hash(msgB).Hex())
+	t.Fatal(1)
 }
 
 func TestSendFinalProof(t *testing.T) {

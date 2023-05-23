@@ -72,4 +72,5 @@ type stateInterface interface {
 	GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error)
 	GetProverProofByHash(ctx context.Context, hash string, batchNumberFinal uint64, dbTx pgx.Tx) (*state.ProverProof, error)
 	AddProverProof(ctx context.Context, proverProof *state.ProverProof, dbTx pgx.Tx) error
+	IsGenerateProofHash(ctx context.Context, sender string, batchNumber uint64, dbTx pgx.Tx) (bool, error)
 }
