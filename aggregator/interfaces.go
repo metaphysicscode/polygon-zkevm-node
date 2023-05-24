@@ -29,6 +29,7 @@ type proverInterface interface {
 // ethTxManager contains the methods required to send txs to
 // ethereum.
 type ethTxManager interface {
+	Update(ctx context.Context, owner, id string, from common.Address, to *common.Address, value *big.Int, data []byte, dbTx pgx.Tx) error
 	Add(ctx context.Context, owner, id string, from common.Address, to *common.Address, value *big.Int, data []byte, dbTx pgx.Tx) error
 	Result(ctx context.Context, owner, id string, dbTx pgx.Tx) (ethtxmanager.MonitoredTxResult, error)
 	ResultsByStatus(ctx context.Context, owner string, statuses []ethtxmanager.MonitoredTxStatus, dbTx pgx.Tx) ([]ethtxmanager.MonitoredTxResult, error)
@@ -70,7 +71,9 @@ type stateInterface interface {
 	GetEarlyProofHashByNumber(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error)
 	GetLastBlock(ctx context.Context, dbTx pgx.Tx) (*state.Block, error)
 	GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error)
+	GetEarlyBlockNumberByBatchNum(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error)
 	GetProverProofByHash(ctx context.Context, hash string, batchNumberFinal uint64, dbTx pgx.Tx) (*state.ProverProof, error)
 	AddProverProof(ctx context.Context, proverProof *state.ProverProof, dbTx pgx.Tx) error
 	IsGenerateProofHash(ctx context.Context, sender string, batchNumber uint64, dbTx pgx.Tx) (bool, error)
+	AddProofHash(ctx context.Context, proofHash *state.ProofHash, dbTx pgx.Tx) error
 }

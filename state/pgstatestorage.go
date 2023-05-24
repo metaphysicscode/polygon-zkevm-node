@@ -2511,3 +2511,15 @@ func (p *PostgresStorage) GetSequenceLastCommitBlock(ctx context.Context, owner 
 
 	return id, blockNumber, nil
 }
+
+func (p *PostgresStorage) GetEarlyBlockNumberByBatchNum(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error) {
+	const EarlyBlockNumberByBatchNumSQL = `SELECT count(1) FROM state.proof_hash WHERE final_new_batch = $1 limit 1`
+	e := p.getExecQuerier(dbTx)
+	var num uint64
+	err := e.QueryRow(ctx, EarlyBlockNumberByBatchNumSQL, batchNumber).Scan(&num)
+	if err != nil || num == 0 {
+		return 0, err
+	}
+
+	return num, nil
+}

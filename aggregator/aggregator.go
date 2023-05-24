@@ -413,6 +413,56 @@ func (a *Aggregator) sendFinalProof() {
 
 				a.resetVerifyProofHashTime()
 				a.endProofHash()
+			} else {
+				num, _ := a.State.GetEarlyBlockNumberByBatchNum(a.ctx, proof.BatchNumberFinal, nil)
+
+				log.Infof("get EarlyblockNumber = %s, proverProof = %v", num, proof.BatchNumberFinal)
+
+				batchNum, _ := a.Ethman.GetLatestVerifiedBatchNum()
+
+				now_block_number, _ := a.Ethman.GetLatestBlockNumber(a.ctx)
+
+				if batchNum < proverProof.FinalNewBatch && now_block_number > num+20 {
+					a.startProofHash()
+
+					sender := common.HexToAddress(a.cfg.SenderAddress)
+					// query
+					to, data, err := a.Ethman.BuildProofHashTxData(proverProof.FinalNewBatch-1, proverProof.FinalNewBatch, hash)
+					if err != nil {
+						log.Errorf("Error estimating proof hash to add to eth tx manager: %v", err)
+						a.endProofHash()
+						continue
+					}
+
+					monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proof.BatchNumber, proof.BatchNumberFinal)
+					err = a.EthTxManager.Update(ctx, ethTxManagerOwner, monitoredTxID, sender, to, nil, data, nil)
+					if err != nil {
+						log := log.WithFields("tx", monitoredTxID)
+						log.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
+
+						//if err := a.State.AddProverProof(a.ctx, &state.ProverProof{
+						//	InitNumBatch:  proof.BatchNumber,
+						//	FinalNewBatch: proof.BatchNumberFinal,
+						//	NewStateRoot:  finalBatch.StateRoot,
+						//	LocalExitRoot: finalBatch.LocalExitRoot,
+						//	Proof:         msg.finalProof.Proof,
+						//	ProofHash:     hash,
+						//}, nil); err != nil {
+						//	log := log.WithFields("tx", monitoredTxID)
+						//	log.Errorf("Error to add prover proof to db: %v", err)
+						//	continue
+						//}
+						//go a.monitorSendProof(proof.BatchNumberFinal)
+						a.endProofHash()
+						a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+						continue
+					}
+
+					a.resetVerifyProofHashTime()
+					a.endProofHash()
+
+				}
+
 			}
 			go a.monitorSendProof(proof.BatchNumberFinal)
 		case proofHash := <-a.proofHashCH:

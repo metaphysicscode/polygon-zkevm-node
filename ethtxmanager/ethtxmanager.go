@@ -64,6 +64,63 @@ func New(cfg Config, ethMan ethermanInterface, storage storageInterface, state s
 	return c
 }
 
+// Update a transaction to be sent and monitored
+func (c *Client) Update(ctx context.Context, owner, id string, from common.Address, to *common.Address, value *big.Int, data []byte, dbTx pgx.Tx) error {
+	// get next nonce
+	nonce, err := c.etherman.CurrentNonce(ctx, from)
+	if err != nil {
+		err := fmt.Errorf("failed to get current nonce: %w", err)
+		log.Errorf(err.Error())
+		return err
+	}
+	// get gas
+	gas, err := c.etherman.EstimateGas(ctx, from, to, value, data)
+	if err != nil {
+		err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
+		log.Error(err.Error())
+		if c.cfg.ForcedGas > 0 {
+			gas = c.cfg.ForcedGas
+		} else {
+			return err
+		}
+	} else {
+		offset := gasOffsets[owner]
+		gas += offset
+		log.Debugf("Applying gasOffset: %d. Final Gas: %d, Owner: %s", offset, gas, owner)
+	}
+
+	gasPrice := big.NewInt(0).SetUint64(c.cfg.GasPrice)
+	// get gas price
+	if c.cfg.GasPrice == 0 {
+		price, err := c.etherman.SuggestedGasPrice(ctx)
+		if err != nil {
+			err := fmt.Errorf("failed to get suggested gas price: %w", err)
+			log.Errorf(err.Error())
+			return err
+		}
+
+		gasPrice = price
+	}
+
+	// create monitored tx
+	mTx := monitoredTx{
+		owner: owner, id: id, from: from, to: to,
+		nonce: nonce, value: value, data: data,
+		gas: gas, gasPrice: gasPrice,
+		status: MonitoredTxStatusCreated,
+	}
+
+	// add to storage
+	err = c.storage.Update(ctx, mTx, dbTx)
+	if err != nil {
+		err := fmt.Errorf("failed to add tx to get monitored: %w", err)
+		log.Errorf(err.Error())
+		return err
+	}
+
+	return nil
+}
+
 // Add a transaction to be sent and monitored
 func (c *Client) Add(ctx context.Context, owner, id string, from common.Address, to *common.Address, value *big.Int, data []byte, dbTx pgx.Tx) error {
 	// get next nonce

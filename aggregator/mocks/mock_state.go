@@ -249,7 +249,7 @@ func (_m *StateMock) GetProofReadyToVerify(ctx context.Context, lastVerfiedBatch
 	return r0, r1
 }
 
-func (_m *StateMock)GetLastBlock(ctx context.Context, dbTx pgx.Tx) (*state.Block, error) {
+func (_m *StateMock) GetLastBlock(ctx context.Context, dbTx pgx.Tx) (*state.Block, error) {
 	ret := _m.Called(ctx, dbTx)
 
 	var r0 *state.Block
@@ -400,9 +400,18 @@ func (_m *StateMock) UpdateGeneratedProof(ctx context.Context, proof *state.Proo
 
 	return r0
 }
-func (_m *StateMock) IsGenerateProofHash(ctx context.Context, sender string, batchNumber uint64, dbTx pgx.Tx) (bool, error){
+func (_m *StateMock) IsGenerateProofHash(ctx context.Context, sender string, batchNumber uint64, dbTx pgx.Tx) (bool, error) {
 
-	return true,nil
+	return true, nil
+}
+
+func (p *StateMock) GetEarlyBlockNumberByBatchNum(ctx context.Context, batchNumber uint64, dbTx pgx.Tx) (uint64, error) {
+
+	return 1, nil
+
+}
+func (p *StateMock) AddProofHash(ctx context.Context, proofHash *state.ProofHash, dbTx pgx.Tx) error {
+	return nil
 }
 
 type mockConstructorTestingTNewStateMock interface {
