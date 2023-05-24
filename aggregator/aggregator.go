@@ -514,10 +514,10 @@ func (a *Aggregator) monitorSendProof(batchNumberFinal uint64) {
 			hash, err := a.State.GetProofHashBySender(a.ctx, a.cfg.SenderAddress, batchNumberFinal, max_commit_proof, blockNumber, nil)
 			if err != nil {
 				if err == state.ProofNotCommit {
-					log.Error("batchNumberFinal  = %d, error: %v", batchNumberFinal, err)
+					log.Errorf("batchNumberFinal  = %d, error: %v", batchNumberFinal, err)
 					return
 				}
-				log.Errorf("Failed get proof hash in monitorSendProof: %v, batchNumberFinal: %d", err, batchNumberFinal)
+				log.Debugf("Failed get proof hash in monitorSendProof: %v, batchNumberFinal: %d", err, batchNumberFinal)
 				continue
 			}
 
