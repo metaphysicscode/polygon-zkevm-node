@@ -2412,27 +2412,12 @@ func (p *PostgresStorage) AddProverProof(ctx context.Context, proverProof *Prove
 }
 
 func (p *PostgresStorage) GetProofHashBySender(ctx context.Context, sender string, batchNumber, minCommit, lastBlockNumber uint64, dbTx pgx.Tx) (string, error) {
-	/*var proofHash string
-	const getBatchByNumberSQL = `SELECT proof_hash FROM state.proof_hash WHERE final_new_batch = $1 and lower(sender) = lower($2) and (block_num + $3) < $4`
-
-	e := p.getExecQuerier(dbTx)
-	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber, sender, minCommit, lastBlockNumber).Scan(&proofHash)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
-	} else if err != nil {
-		return "", err
-	}
-
-	return proofHash, nil
-	*/
-
 	var proofHash string
 	var blockNum uint64
-	const getBatchByNumberSQL = `SELECT proof_hash, block_num FROM state.proof_hash WHERE final_new_batch = $1 order by block_num limit 1`
+	const getProofHashSQL = `SELECT proof_hash, block_num FROM state.proof_hash WHERE final_new_batch = $1 order by block_num limit 1`
 
 	e := p.getExecQuerier(dbTx)
-	err := e.QueryRow(ctx, getBatchByNumberSQL, batchNumber).Scan(&proofHash, &blockNum)
+	err := e.QueryRow(ctx, getProofHashSQL, batchNumber).Scan(&proofHash, &blockNum)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
@@ -2442,6 +2427,16 @@ func (p *PostgresStorage) GetProofHashBySender(ctx context.Context, sender strin
 
 	if (blockNum + minCommit) >= lastBlockNumber {
 		return "", ErrNotFound
+	}
+
+	const getBatchByNumberSQL = `SELECT proof_hash FROM state.proof_hash WHERE final_new_batch = $1 and lower(sender) = lower($2)`
+
+	err = e.QueryRow(ctx, getBatchByNumberSQL, batchNumber, sender).Scan(&proofHash)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ProofNotCommit
+	} else if err != nil {
+		return "", err
 	}
 
 	return proofHash, nil

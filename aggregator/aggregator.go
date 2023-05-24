@@ -505,13 +505,6 @@ func (a *Aggregator) monitorSendProof(batchNumberFinal uint64) {
 		case <-a.ctx.Done():
 			return
 		case <-tick.C:
-
-			// block, err := a.State.GetLastBlock(a.ctx, nil)
-			// if err != nil {
-			// 	log.Errorf("Failed get last block in monitorSendProof: %v", err)
-			// 	continue
-			// }
-
 			blockNumber, err := a.Ethman.GetLatestBlockNumber(a.ctx)
 			if err != nil {
 				log.Errorf("Failed get last block by jsonrpc: %v", err)
@@ -520,7 +513,11 @@ func (a *Aggregator) monitorSendProof(batchNumberFinal uint64) {
 
 			hash, err := a.State.GetProofHashBySender(a.ctx, a.cfg.SenderAddress, batchNumberFinal, max_commit_proof, blockNumber, nil)
 			if err != nil {
-				log.Errorf("Failed get proof hash in monitorSendProof: %v", err)
+				if err == state.ProofNotCommit {
+					log.Error("batchNumberFinal  = %d, error: %v", batchNumberFinal, err)
+					return
+				}
+				log.Errorf("Failed get proof hash in monitorSendProof: %v, batchNumberFinal: %d", err, batchNumberFinal)
 				continue
 			}
 
