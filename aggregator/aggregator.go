@@ -371,18 +371,18 @@ func (a *Aggregator) sendFinalProof() {
 					log := log.WithFields("tx", monitoredTxID)
 					log.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
 
-					//if err := a.State.AddProverProof(a.ctx, &state.ProverProof{
-					//	InitNumBatch:  proof.BatchNumber,
-					//	FinalNewBatch: proof.BatchNumberFinal,
-					//	NewStateRoot:  finalBatch.StateRoot,
-					//	LocalExitRoot: finalBatch.LocalExitRoot,
-					//	Proof:         msg.finalProof.Proof,
-					//	ProofHash:     hash,
-					//}, nil); err != nil {
-					//	log := log.WithFields("tx", monitoredTxID)
-					//	log.Errorf("Error to add prover proof to db: %v", err)
-					//	continue
-					//}
+					if err := a.State.AddProverProof(a.ctx, &state.ProverProof{
+						InitNumBatch:  proof.BatchNumber,
+						FinalNewBatch: proof.BatchNumberFinal,
+						NewStateRoot:  finalBatch.StateRoot,
+						LocalExitRoot: finalBatch.LocalExitRoot,
+						Proof:         msg.finalProof.Proof,
+						ProofHash:     hash,
+					}, nil); err != nil {
+						log := log.WithFields("tx", monitoredTxID)
+						log.Errorf("Error to add prover proof to db: %v", err)
+						continue
+					}
 					//go a.monitorSendProof(proof.BatchNumberFinal)
 					a.endProofHash()
 					a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
@@ -464,6 +464,7 @@ func (a *Aggregator) sendFinalProof() {
 				}
 
 			}
+
 			go a.monitorSendProof(proof.BatchNumberFinal)
 		case proofHash := <-a.proofHashCH:
 			proverProof, err := a.State.GetProverProofByHash(a.ctx, proofHash.hash, proofHash.batchNumberFinal, nil)
