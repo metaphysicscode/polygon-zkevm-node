@@ -413,10 +413,11 @@ func (a *Aggregator) sendFinalProof() {
 
 				a.resetVerifyProofHashTime()
 				a.endProofHash()
+				go a.monitorSendProof(proof.BatchNumberFinal)
 			} else {
-				num, _ := a.State.GetEarlyBlockNumberByBatchNum(a.ctx, proof.BatchNumberFinal, nil)
+				num, _ := a.State.GetEarlyBlockNumberByBatchNum(a.ctx, proverProof.FinalNewBatch, nil)
 
-				log.Infof("get EarlyblockNumber = %s, proverProof = %v", num, proof.BatchNumberFinal)
+				log.Infof("get EarlyblockNumber = %s, proverProof = %v", num, proverProof.FinalNewBatch)
 
 				batchNum, _ := a.Ethman.GetLatestVerifiedBatchNum()
 
@@ -434,7 +435,7 @@ func (a *Aggregator) sendFinalProof() {
 						continue
 					}
 
-					monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proof.BatchNumber, proof.BatchNumberFinal)
+					monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proverProof.InitNumBatch, proverProof.FinalNewBatch)
 					err = a.EthTxManager.Update(ctx, ethTxManagerOwner, monitoredTxID, sender, to, nil, data, nil)
 					if err != nil {
 						log := log.WithFields("tx", monitoredTxID)
@@ -457,15 +458,13 @@ func (a *Aggregator) sendFinalProof() {
 						a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 						continue
 					}
-
 					a.resetVerifyProofHashTime()
 					a.endProofHash()
 
 				}
-
+				go a.monitorSendProof(proverProof.FinalNewBatch)
 			}
 
-			go a.monitorSendProof(proof.BatchNumberFinal)
 		case proofHash := <-a.proofHashCH:
 			proverProof, err := a.State.GetProverProofByHash(a.ctx, proofHash.hash, proofHash.batchNumberFinal, nil)
 			if err != nil {
