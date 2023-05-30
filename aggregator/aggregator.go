@@ -155,7 +155,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize proofs cache %v", err)
 	}
 
-	go a.resendProoHash()
+	go a.resendProofHash()
 
 	address := fmt.Sprintf("%s:%d", a.cfg.Host, a.cfg.Port)
 	lis, err := net.Listen("tcp", address)
@@ -186,7 +186,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (a *Aggregator) sendGenarateFinalProof() {
+func (a *Aggregator) sendGenerateFinalProof() {
 	var lastVerifiedBatchNum uint64
 	lastVerifiedBatch, err := a.State.GetLastVerifiedBatch(a.ctx, nil)
 	if err != nil && !errors.Is(err, state.ErrNotFound) {
@@ -241,7 +241,7 @@ func (a *Aggregator) sendGenarateFinalProof() {
 	}
 }
 
-func (a *Aggregator) resendProoHash() {
+func (a *Aggregator) resendProofHash() {
 	blockNumber := uint64(0)
 	lastBatchNum := uint64(0)
 	initBlockNumber := uint64(0)
@@ -300,7 +300,7 @@ func (a *Aggregator) resendProoHash() {
 			log.Infof("sequence : %v", sequence)
 
 			monitoredProofTxID := buildMonitoredTxID(sequence.FromBatchNumber, sequence.ToBatchNumber)
-			monitoredProofhashTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
+			monitoredProofHashTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
 
 			_, status, err := a.State.GetTxBlockNum(a.ctx, monitoredProofTxID, nil)
 			if err != nil && err != state.ErrNotFound {
@@ -320,9 +320,9 @@ func (a *Aggregator) resendProoHash() {
 				}
 			}
 
-			_, status, err = a.State.GetTxBlockNum(a.ctx, monitoredProofhashTxID, nil)
+			_, status, err = a.State.GetTxBlockNum(a.ctx, monitoredProofHashTxID, nil)
 			if err != nil {
-				log.Debugf("failed to get tx block number. monitoredTxID = %s, err = %v", monitoredProofhashTxID, err)
+				log.Debugf("failed to get tx block number. monitoredTxID = %s, err = %v", monitoredProofHashTxID, err)
 				tmp = sequence.ToBatchNumber
 				continue
 			}
@@ -335,22 +335,22 @@ func (a *Aggregator) resendProoHash() {
 
 			if firstProofHashBlockNumber == 0 {
 				if status == ethtxmanager.MonitoredTxStatusFailed.String() {
-					if err := a.EthTxManager.UpdateId(a.ctx, monitoredProofhashTxID, nil); err != nil {
-						log.Debugf("failed to update monitored Proofhash tx id. monitoredProofhashTxID: %s, err: %v", monitoredProofhashTxID, err)
+					if err := a.EthTxManager.UpdateId(a.ctx, monitoredProofHashTxID, nil); err != nil {
+						log.Debugf("failed to update monitored ProofHash tx id. monitoredProofHashTxID: %s, err: %v", monitoredProofHashTxID, err)
 					}
 				}
 				continue
 			}
 
-			log.Infof("proofHashTxBlockNumber : %v, monitoredTxID: %s", firstProofHashBlockNumber, monitoredProofhashTxID)
+			log.Infof("proofHashTxBlockNumber : %v, monitoredTxID: %s", firstProofHashBlockNumber, monitoredProofHashTxID)
 
 			if (firstProofHashBlockNumber + 20) > curBlockNumber {
 				if (firstProofHashBlockNumber + 10) < curBlockNumber {
 					a.monitoredProofHashTxLock.Lock()
-					if _, ok := a.monitoredProofHashTx[monitoredProofhashTxID]; !ok {
-						a.monitoredProofHashTx[monitoredProofhashTxID] = true
+					if _, ok := a.monitoredProofHashTx[monitoredProofHashTxID]; !ok {
+						a.monitoredProofHashTx[monitoredProofHashTxID] = true
 					}
-					go a.monitorSendProof(sequence.FromBatchNumber, sequence.ToBatchNumber, monitoredProofhashTxID)
+					go a.monitorSendProof(sequence.FromBatchNumber, sequence.ToBatchNumber, monitoredProofHashTxID)
 					a.monitoredProofHashTxLock.Unlock()
 				}
 				log.Debugf("no resend. proofHashTxBlockNumber = %d, curBlockNumber = %d", firstProofHashBlockNumber, curBlockNumber)
@@ -358,15 +358,15 @@ func (a *Aggregator) resendProoHash() {
 				continue
 			}
 
-			if err := a.EthTxManager.UpdateId(a.ctx, monitoredProofhashTxID, nil); err != nil {
-				log.Debugf("failed to update monitored Proofhash tx id. monitoredProofhashTxID: %s, err: %v", monitoredProofhashTxID, err)
+			if err := a.EthTxManager.UpdateId(a.ctx, monitoredProofHashTxID, nil); err != nil {
+				log.Debugf("failed to update monitored ProofHash tx id. monitoredProofHashTxID: %s, err: %v", monitoredProofHashTxID, err)
 				continue
 			}
-			log.Infof("resend proof hash tx end. monitoredProofhashTxID: %s", monitoredProofhashTxID)
+			log.Infof("resend proof hash tx end. monitoredProofHashTxID: %s", monitoredProofHashTxID)
 			tmp = sequence.ToBatchNumber
 		}
 
-		a.sendGenarateFinalProof()
+		a.sendGenerateFinalProof()
 	}
 }
 
@@ -439,24 +439,6 @@ func (a *Aggregator) Channel(stream pb.AggregatorService_ChannelServer) error {
 				log.Debug("Prover is not idle")
 				time.Sleep(a.cfg.RetryTime.Duration)
 				continue
-			}
-
-			lastVerifiedBatch, err := a.State.GetLastVerifiedBatch(ctx, nil)
-			if err != nil && !errors.Is(err, state.ErrNotFound) {
-				log.Errorf("failed to get last verified batch, %w", err)
-				continue
-			}
-			if lastVerifiedBatch != nil {
-				//
-				batchNumberFinal := lastVerifiedBatch.BatchNumber + 1
-				b, err := a.State.IsGenerateProofHash(a.ctx, a.cfg.SenderAddress, batchNumberFinal, nil)
-				if err != nil {
-					log.Errorf("failed to read db, %w", err)
-					continue
-				}
-				if b {
-					a.monitorSendProof(batchNumberFinal)
-				}
 			}
 
 			_, err = a.tryBuildFinalProof(ctx, prover, nil)
@@ -599,7 +581,7 @@ func (a *Aggregator) sendFinalProof() {
 						log.Debugf("delete from finalProofMsgs. lastVerifiedEthBatchNum: %d, msg.recursiveProof.BatchNumberFinal: %d, finalProofMsgs size: %d", lastVerifiedEthBatchNum, msg.recursiveProof.BatchNumberFinal, len(finalProofMsgs))
 					}
 
-					log.Debugf("wait commit . current commit proof init hash batch num. %d, comming: %d", commitProoHashBatchNum, msg.recursiveProof.BatchNumber)
+					log.Debugf("wait commit . current commit proof init hash batch num. %d, coming: %d", commitProoHashBatchNum, msg.recursiveProof.BatchNumber)
 					lock.Unlock()
 					continue
 				}
@@ -988,7 +970,7 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 			log.Warnf("failed to get sequence. err: %v", err)
 			return false, err
 		}
-		// 增加一个判断，判断是否在处理中，在的话 就
+
 		var stateFinalProof *state.FinalProof
 		var errFinalProof error
 		monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
@@ -1173,7 +1155,7 @@ func (a *Aggregator) validateEligibleFinalProof(ctx context.Context, proof *stat
 			}
 			return false, false, nil
 		} else {
-			log.Debugf("Proof batch number %d is not the following to last verfied batch number %d", proof.BatchNumber, lastVerifiedBatchNum)
+			log.Debugf("Proof batch number %d is not the following to last verified batch number %d", proof.BatchNumber, lastVerifiedBatchNum)
 			bComplete, err := a.State.CheckProofContainsCompleteSequences(ctx, proof, nil)
 			if err != nil {
 				return false, false, fmt.Errorf("failed to check if proof contains complete sequences, %v", err)
