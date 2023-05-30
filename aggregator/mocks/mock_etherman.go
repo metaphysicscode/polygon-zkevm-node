@@ -157,6 +157,13 @@ func (_m *Etherman)  JudgeAggregatorDeposit(account common.Address) (bool, error
 	return  true,nil
 }
 
+func (_m *Etherman)  GetProofHashCommitEpoch() (uint8, error) {
+	return 10,nil
+}
+func (_m *Etherman)  GetProofCommitEpoch() (uint8, error) {
+	return 32,nil
+}
+
 type mockConstructorTestingTNewEtherman interface {
 	mock.TestingT
 	Cleanup(func())

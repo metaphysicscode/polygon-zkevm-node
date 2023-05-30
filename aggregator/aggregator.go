@@ -40,8 +40,6 @@ const (
 	ethTxManagerOwner     = "aggregator"
 	monitoredIDFormat     = "proof-from-%v-to-%v"
 	monitoredHashIDFormat = "proof-hash-from-%v-to-%v"
-
-	max_commit_proof = 10
 )
 
 type finalProofMsg struct {
@@ -90,6 +88,8 @@ type Aggregator struct {
 	monitoredProofHashTx     map[string]bool
 	txsMutex                 *sync.Mutex
 	txs                      map[string]bool
+	proofHashCommitEpoch     uint8
+	proofCommitEpoch         uint8
 }
 
 // New creates a new aggregator.
@@ -105,6 +105,16 @@ func New(
 		profitabilityChecker = NewTxProfitabilityCheckerBase(stateInterface, cfg.IntervalAfterWhichBatchConsolidateAnyway.Duration, cfg.TxProfitabilityMinReward.Int)
 	case ProfitabilityAcceptAll:
 		profitabilityChecker = NewTxProfitabilityCheckerAcceptAll(stateInterface, cfg.IntervalAfterWhichBatchConsolidateAnyway.Duration)
+	}
+
+	proofHashCommitEpoch, err := etherman.GetProofHashCommitEpoch()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	proofCommitEpoch, err := etherman.GetProofCommitEpoch()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	a := Aggregator{
@@ -125,8 +135,10 @@ func New(
 		monitoredProofHashTxLock: &sync.Mutex{},
 		monitoredProofHashTx:     make(map[string]bool),
 
-		txsMutex: &sync.Mutex{},
-		txs:      make(map[string]bool, 0),
+		txsMutex:             &sync.Mutex{},
+		txs:                  make(map[string]bool, 0),
+		proofHashCommitEpoch: proofHashCommitEpoch,
+		proofCommitEpoch:     proofCommitEpoch,
 	}
 
 	return a, nil
@@ -265,6 +277,21 @@ func (a *Aggregator) resendProofHash() {
 			continue
 		}
 
+		proofHashCommitEpoch, err := a.Ethman.GetProofHashCommitEpoch()
+		if err != nil {
+			log.Fatal(err)
+			continue
+		}
+
+		proofCommitEpoch, err := a.Ethman.GetProofCommitEpoch()
+		if err != nil {
+			log.Fatal(err)
+			continue
+		}
+
+		a.proofHashCommitEpoch = proofHashCommitEpoch
+		a.proofCommitEpoch = proofCommitEpoch
+
 		blockNumber = curBlockNumber
 
 		lastVerifiedEthBatchNum, err := a.Ethman.GetLatestVerifiedBatchNum()
@@ -277,6 +304,7 @@ func (a *Aggregator) resendProofHash() {
 			initBlockNumber = curBlockNumber
 			initLastBatchNum = lastVerifiedEthBatchNum
 		}
+		commitEpoch := uint64(a.proofHashCommitEpoch + a.proofCommitEpoch)
 
 		for {
 			sequence, err := a.State.GetSequence(a.ctx, tmp+1, nil)
@@ -290,7 +318,7 @@ func (a *Aggregator) resendProofHash() {
 			}
 
 			if lastBatchNum > 0 && lastBatchNum > sequence.ToBatchNumber {
-				if curBlockNumber-initBlockNumber <= 20 {
+				if curBlockNumber-initBlockNumber <= commitEpoch {
 					break
 				}
 			}
@@ -344,8 +372,8 @@ func (a *Aggregator) resendProofHash() {
 
 			log.Infof("proofHashTxBlockNumber : %v, monitoredTxID: %s", firstProofHashBlockNumber, monitoredProofHashTxID)
 
-			if (firstProofHashBlockNumber + 20) > curBlockNumber {
-				if (firstProofHashBlockNumber + 10) < curBlockNumber {
+			if (firstProofHashBlockNumber + commitEpoch) > curBlockNumber {
+				if (firstProofHashBlockNumber + uint64(a.proofHashCommitEpoch)) < curBlockNumber {
 					a.monitoredProofHashTxLock.Lock()
 					if _, ok := a.monitoredProofHashTx[monitoredProofHashTxID]; !ok {
 						a.monitoredProofHashTx[monitoredProofHashTxID] = true
@@ -828,12 +856,12 @@ func (a *Aggregator) monitorSendProof(batchNumber, batchNumberFinal uint64, moni
 				continue
 			}
 
-			log.Infof("proofHashBlockNum = %d, max_commit_proof = %d, blockNumber =%d, monitoredTxID = %s", proofHashBlockNum, max_commit_proof, blockNumber, monitoredTxID)
-			if proofHashBlockNum == 0 || proofHashBlockNum+max_commit_proof > blockNumber {
+			log.Infof("proofHashBlockNum = %d, max_commit_proof = %d, blockNumber =%d, monitoredTxID = %s", proofHashBlockNum, a.proofHashCommitEpoch, blockNumber, monitoredTxID)
+			if proofHashBlockNum == 0 || (proofHashBlockNum+uint64(a.proofHashCommitEpoch)) > blockNumber {
 				continue
 			}
 
-			hash, err := a.State.GetProofHashBySender(a.ctx, a.cfg.SenderAddress, batchNumberFinal, max_commit_proof, blockNumber, nil)
+			hash, err := a.State.GetProofHashBySender(a.ctx, a.cfg.SenderAddress, batchNumberFinal, uint64(a.proofHashCommitEpoch), blockNumber, nil)
 			if err != nil {
 				if err == state.ProofNotCommit {
 					log.Errorf("batchNumberFinal  = %d, error: %v", batchNumberFinal, err)
@@ -1823,8 +1851,8 @@ func (a *Aggregator) handleMonitoredTxResult(result ethtxmanager.MonitoredTxResu
 				log.Errorf("Failed get last block by jsonrpc: %v", err)
 				return
 			}
-
-			if proofHashBlockNum == 0 || (proofHashBlockNum+max_commit_proof*2-2) < blockNumber {
+			commitEpoch := uint64(a.proofHashCommitEpoch + a.proofCommitEpoch)
+			if proofHashBlockNum == 0 || (proofHashBlockNum+commitEpoch-2) < blockNumber {
 				msg := finalProofMsg{}
 				proof := &state.Proof{
 					BatchNumber:      proofBatchNumber,

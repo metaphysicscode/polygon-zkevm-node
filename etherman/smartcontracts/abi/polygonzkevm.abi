@@ -549,6 +549,32 @@
       "inputs": [
         {
           "indexed": false,
+          "internalType": "uint8",
+          "name": "newProofCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "SetProofCommitEpoch",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "newProofHashCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "SetProofHashCommitEpoch",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
           "internalType": "address",
           "name": "newTrustedAggregator",
           "type": "address"
@@ -853,19 +879,6 @@
     },
     {
       "inputs": [],
-      "name": "commitNum",
-      "outputs": [
-        {
-          "internalType": "uint8",
-          "name": "",
-          "type": "uint8"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
       "name": "deactivateEmergencyState",
       "outputs": [],
       "stateMutability": "nonpayable",
@@ -1074,7 +1087,7 @@
               "type": "uint64"
             }
           ],
-          "internalType": "struct PolygonZkEVM.InitializePackedParameters",
+          "internalType": "struct PolygonZkEVMV2.InitializePackedParameters",
           "name": "initializePackedParameters",
           "type": "tuple"
         },
@@ -1360,6 +1373,32 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "proofCommitEpoch",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "proofHashCommitEpoch",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -1549,7 +1588,7 @@
               "type": "uint64"
             }
           ],
-          "internalType": "struct PolygonZkEVM.BatchData[]",
+          "internalType": "struct PolygonZkEVMV2.BatchData[]",
           "name": "batches",
           "type": "tuple[]"
         },
@@ -1584,7 +1623,7 @@
               "type": "uint64"
             }
           ],
-          "internalType": "struct PolygonZkEVM.ForcedBatchData[]",
+          "internalType": "struct PolygonZkEVMV2.ForcedBatchData[]",
           "name": "batches",
           "type": "tuple[]"
         }
@@ -1631,19 +1670,6 @@
         }
       ],
       "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint8",
-          "name": "newCommitNum",
-          "type": "uint8"
-        }
-      ],
-      "name": "setCommitNum",
-      "outputs": [],
-      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -1720,6 +1746,32 @@
         }
       ],
       "name": "setNoProofPunishAmount",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint8",
+          "name": "_newCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "setProofCommitEpoch",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint8",
+          "name": "_newCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "setProofHashCommitEpoch",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"

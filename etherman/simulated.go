@@ -73,7 +73,7 @@ func NewSimulatedEtherman(cfg Config, auth *bind.TransactOpts) (etherman *Client
 		return nil, nil, common.Address{}, nil, err
 	}
 
-	poeParams := polygonzkevm.PolygonZkEVMInitializePackedParameters{
+	poeParams := polygonzkevm.PolygonZkEVMV2InitializePackedParameters{
 		Admin:                    auth.From,
 		TrustedSequencer:         auth.From,
 		PendingStateTimeout:      10000, //nolint:gomnd
