@@ -1026,6 +1026,10 @@ func (s *ClientSynchronizer) processTrustedVerifyBatches(lastVerifiedBatch ether
 		log.Errorf("error getting lastVerifiedBatch stored in db in processTrustedVerifyBatches. Processing synced blockNumber: %d, error: %v", lastVerifiedBatch.BlockNumber, err)
 		return err
 	}
+	if lastVerifiedBatch.BatchNumber <= lastVBatch.BatchNumber {
+		log.Debugf("resend commit proof data. lastVBatch: %v, lastVerifiedBatch: %v", lastVBatch, lastVerifiedBatch)
+		return nil
+	}
 	nbatches := lastVerifiedBatch.BatchNumber - lastVBatch.BatchNumber
 	batch, err := s.state.GetBatchByNumber(s.ctx, lastVerifiedBatch.BatchNumber, dbTx)
 	if err != nil {
