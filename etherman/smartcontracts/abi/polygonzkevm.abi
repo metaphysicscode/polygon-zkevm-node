@@ -887,25 +887,6 @@
     {
       "inputs": [
         {
-          "internalType": "uint64",
-          "name": "",
-          "type": "uint64"
-        }
-      ],
-      "name": "finalNewBatches",
-      "outputs": [
-        {
-          "internalType": "uint64",
-          "name": "",
-          "type": "uint64"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
           "internalType": "bytes",
           "name": "transactions",
           "type": "bytes"
@@ -1087,7 +1068,7 @@
               "type": "uint64"
             }
           ],
-          "internalType": "struct PolygonZkEVMV2.InitializePackedParameters",
+          "internalType": "struct PolygonZkEVM.InitializePackedParameters",
           "name": "initializePackedParameters",
           "type": "tuple"
         },
@@ -1588,7 +1569,7 @@
               "type": "uint64"
             }
           ],
-          "internalType": "struct PolygonZkEVMV2.BatchData[]",
+          "internalType": "struct PolygonZkEVM.BatchData[]",
           "name": "batches",
           "type": "tuple[]"
         },
@@ -1623,7 +1604,7 @@
               "type": "uint64"
             }
           ],
-          "internalType": "struct PolygonZkEVMV2.ForcedBatchData[]",
+          "internalType": "struct PolygonZkEVM.ForcedBatchData[]",
           "name": "batches",
           "type": "tuple[]"
         }
@@ -1988,4 +1969,4 @@
       "stateMutability": "nonpayable",
       "type": "function"
     }
-  ]
+]

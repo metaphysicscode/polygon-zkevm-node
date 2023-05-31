@@ -544,9 +544,9 @@ func (etherMan *Client) BuildSequenceBatchesTxData(sender common.Address, sequen
 }
 
 func (etherMan *Client) sequenceBatches(opts bind.TransactOpts, sequences []ethmanTypes.Sequence) (*types.Transaction, error) {
-	var batches []polygonzkevm.PolygonZkEVMV2BatchData
+	var batches []polygonzkevm.PolygonZkEVMBatchData
 	for _, seq := range sequences {
-		batch := polygonzkevm.PolygonZkEVMV2BatchData{
+		batch := polygonzkevm.PolygonZkEVMBatchData{
 			Transactions:       seq.BatchL2Data,
 			GlobalExitRoot:     seq.GlobalExitRoot,
 			Timestamp:          uint64(seq.Timestamp),
@@ -855,7 +855,7 @@ func decodeSequences(txData []byte, lastBatchNumber uint64, sequencer common.Add
 	if err != nil {
 		return nil, err
 	}
-	var sequences []polygonzkevm.PolygonZkEVMV2BatchData
+	var sequences []polygonzkevm.PolygonZkEVMBatchData
 	bytedata, err := json.Marshal(data[0])
 	if err != nil {
 		return nil, err
@@ -869,12 +869,12 @@ func decodeSequences(txData []byte, lastBatchNumber uint64, sequencer common.Add
 	for i, seq := range sequences {
 		bn := lastBatchNumber - uint64(len(sequences)-(i+1))
 		sequencedBatches[i] = SequencedBatch{
-			BatchNumber:             bn,
-			SequencerAddr:           sequencer,
-			TxHash:                  txHash,
-			Nonce:                   nonce,
-			Coinbase:                coinbase,
-			PolygonZkEVMV2BatchData: seq,
+			BatchNumber:           bn,
+			SequencerAddr:         sequencer,
+			TxHash:                txHash,
+			Nonce:                 nonce,
+			Coinbase:              coinbase,
+			PolygonZkEVMBatchData: seq,
 		}
 	}
 
@@ -1075,7 +1075,7 @@ func decodeSequencedForceBatches(txData []byte, lastBatchNumber uint64, sequence
 		return nil, err
 	}
 
-	var forceBatches []polygonzkevm.PolygonZkEVMV2ForcedBatchData
+	var forceBatches []polygonzkevm.PolygonZkEVMForcedBatchData
 	bytedata, err := json.Marshal(data[0])
 	if err != nil {
 		return nil, err
@@ -1089,12 +1089,12 @@ func decodeSequencedForceBatches(txData []byte, lastBatchNumber uint64, sequence
 	for i, force := range forceBatches {
 		bn := lastBatchNumber - uint64(len(forceBatches)-(i+1))
 		sequencedForcedBatches[i] = SequencedForceBatch{
-			BatchNumber:                   bn,
-			Coinbase:                      sequencer,
-			TxHash:                        txHash,
-			Timestamp:                     time.Unix(int64(block.Time()), 0),
-			Nonce:                         nonce,
-			PolygonZkEVMV2ForcedBatchData: force,
+			BatchNumber:                 bn,
+			Coinbase:                    sequencer,
+			TxHash:                      txHash,
+			Timestamp:                   time.Unix(int64(block.Time()), 0),
+			Nonce:                       nonce,
+			PolygonZkEVMForcedBatchData: force,
 		}
 	}
 	return sequencedForcedBatches, nil
