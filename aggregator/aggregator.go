@@ -279,13 +279,13 @@ func (a *Aggregator) resendProofHash() {
 
 		proofHashCommitEpoch, err := a.Ethman.GetProofHashCommitEpoch()
 		if err != nil {
-			log.Fatal(err)
+			log.Error(err)
 			continue
 		}
 
 		proofCommitEpoch, err := a.Ethman.GetProofCommitEpoch()
 		if err != nil {
-			log.Fatal(err)
+			log.Error(err)
 			continue
 		}
 
@@ -1383,6 +1383,18 @@ func (a *Aggregator) tryAggregateProofs(ctx context.Context, prover proverInterf
 		return false, errFinalProof
 	}
 	if errFinalProof == state.ErrNotFound {
+		if !json.Valid([]byte(proof1.Proof)) {
+			err = fmt.Errorf("invalid json. BatchNumberFinal: %d", proof1.BatchNumberFinal)
+			log.Error(err)
+			return false, err
+		}
+
+		if !json.Valid([]byte(proof2.Proof)) {
+			err = fmt.Errorf("invalid json. BatchNumberFinal: %d", proof2.BatchNumberFinal)
+			log.Error(err)
+			return false, err
+		}
+
 		aggrProofID, err = prover.AggregatedProof(proof1.Proof, proof2.Proof)
 		if err != nil {
 			err = fmt.Errorf("failed to get aggregated proof id, %v", err)
