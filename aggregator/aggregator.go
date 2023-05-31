@@ -845,6 +845,10 @@ func (a *Aggregator) monitorSendProof(batchNumber, batchNumberFinal uint64, moni
 				continue
 			}
 
+			if lastVerifiedEthBatchNum >= batchNumberFinal {
+				break
+			}
+
 			if (lastVerifiedEthBatchNum + 1) != batchNumber {
 				log.Debugf("lastVerifiedEthBatchNum: %d, initBatchNum: %d", lastVerifiedEthBatchNum, batchNumber)
 				continue
