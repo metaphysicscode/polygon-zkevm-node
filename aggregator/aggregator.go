@@ -1048,12 +1048,21 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 				return false, err
 			}
 
+			if !json.Valid([]byte(proof.Proof)) {
+				err = fmt.Errorf("invalid json. BatchNumberFinal: %d", proof.BatchNumberFinal)
+				log.Error(err)
+				a.buildFinalProofBatchNum = 0
+				a.buildFinalProofBatchNumMutex.Unlock()
+				return false, err
+			}
+
 			a.buildFinalProofBatchNum = proof.BatchNumberFinal
 			a.buildFinalProofBatchNumMutex.Unlock()
 			msg = finalProofMsg{
 				proverName: proverName,
 				proverID:   proverID,
 			}
+
 			// at this point we have an eligible proof, build the final one using it
 			finalProof, err := a.buildFinalProof(ctx, prover, proof)
 			if err != nil {
