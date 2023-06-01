@@ -314,7 +314,11 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 				mTxLog.Errorf("failed to check if tx %v was mined: %v", txHash.String(), err)
 				continue
 			}
-			log.Info(mTx.id, mined, receipt.Status)
+			if receipt != nil {
+				log.Info(mTx.id, mined, receipt.Status)
+			} else {
+				log.Info(mTx.id, mined)
+			}
 			// if the tx is not mined yet, check that not all the tx were mined and go to the next
 			if !mined {
 				allHistoryTxMined = false
