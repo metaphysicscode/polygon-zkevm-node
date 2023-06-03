@@ -1172,7 +1172,9 @@ func (etherMan *Client) GetLatestVerifiedBatchNum() (uint64, error) {
 
 func (etherMan *Client) GetSequencedBatch(finalBatchNum uint64) (uint64, error) {
 	sequencedBatch, err := etherMan.PoE.SequencedBatches(&bind.CallOpts{Pending: false}, finalBatchNum)
-
+	if err != nil {
+		return 0, err
+	}
 	return sequencedBatch.BlockNumber.Uint64(), err
 }
 

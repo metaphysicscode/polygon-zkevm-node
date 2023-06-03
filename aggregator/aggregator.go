@@ -733,6 +733,36 @@ func (a *Aggregator) sendFinalProof() {
 			proverProof, err := a.State.GetProverProofByHash(a.ctx, proofHash.hash, proofHash.batchNumberFinal, nil)
 			if err != nil {
 				log.Errorf("Error to get prover proof: %v", err)
+				proofHashBlockNum, err := a.Ethman.GetSequencedBatch(proofHash.batchNumberFinal)
+				if err != nil {
+					log.Errorf("failed to get block number for first proof hash")
+					a.proofHashCH <- proofHash
+					continue
+				}
+
+				blockNumber, err := a.Ethman.GetLatestBlockNumber(a.ctx)
+				if err != nil {
+					log.Errorf("Failed get last block by jsonrpc: %v", err)
+					a.proofHashCH <- proofHash
+					return
+				}
+				commitEpoch := uint64(a.proofHashCommitEpoch + a.proofCommitEpoch)
+				if (proofHashBlockNum + commitEpoch) < blockNumber {
+					a.txsMutex.Lock()
+					delete(a.txs, proofHash.monitoredProofHashTxID)
+					a.txsMutex.Unlock()
+
+					a.finalProofMutex.Lock()
+					delete(a.finalProofs, proverProof.FinalNewBatch)
+					a.finalProofMutex.Unlock()
+
+					a.monitoredProofHashTxLock.Lock()
+					if b, ok := a.monitoredProofHashTx[proofHash.monitoredProofHashTxID]; ok && b {
+						delete(a.monitoredProofHashTx, proofHash.monitoredProofHashTxID)
+					}
+					a.monitoredProofHashTxLock.Unlock()
+					continue
+				}
 				a.proofHashCH <- proofHash
 				continue
 			}
