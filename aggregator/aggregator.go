@@ -89,6 +89,9 @@ type Aggregator struct {
 	finalProofs              map[uint64]bool
 	proofHashCommitEpoch     uint8
 	proofCommitEpoch         uint8
+
+	buildFinalProofBatchNumMutex *sync.Mutex
+	buildFinalProofBatchNum      uint64
 }
 
 // New creates a new aggregator.
@@ -140,6 +143,8 @@ func New(
 
 		proofHashCommitEpoch: proofHashCommitEpoch,
 		proofCommitEpoch:     proofCommitEpoch,
+
+		buildFinalProofBatchNumMutex: &sync.Mutex{},
 	}
 
 	return a, nil
@@ -214,6 +219,9 @@ func (a *Aggregator) sendGenerateFinalProof() {
 	if lastVerifiedBatch != nil {
 		lastVerifiedBatchNum = lastVerifiedBatch.BatchNumber
 	}
+
+	log := log.WithFields("lastVerifiedBatch", lastVerifiedBatch)
+
 	for {
 		var msg finalProofMsg
 
@@ -234,6 +242,7 @@ func (a *Aggregator) sendGenerateFinalProof() {
 			continue
 		}
 		a.finalProofMutex.Unlock()
+
 		stateFinalProof, errFinalProof := a.State.GetFinalProofByMonitoredId(a.ctx, monitoredTxID, nil)
 		if errFinalProof != nil {
 			lastVerifiedBatchNum = sequence.ToBatchNumber
@@ -248,7 +257,7 @@ func (a *Aggregator) sendGenerateFinalProof() {
 		}
 		msg.recursiveProof = proof
 		msg.finalProof = &pb.FinalProof{Proof: stateFinalProof.FinalProof}
-		log.Debugf("sendGenerateFinalProof. monitoredTxID: %s, lastVerifiedBatchNum: %d", monitoredTxID, lastVerifiedBatchNum)
+		log.Debugf("sendGenerateFinalProof. monitoredTxID: %s", monitoredTxID)
 		a.finalProof <- msg
 		lastVerifiedBatchNum = sequence.ToBatchNumber
 	}
@@ -325,11 +334,9 @@ func (a *Aggregator) resendProofHash() {
 			}
 
 			lastBatchNum = sequence.ToBatchNumber
-
-			log.Infof("sequence : %v", sequence)
-
 			monitoredProofTxID := buildMonitoredTxID(sequence.FromBatchNumber, sequence.ToBatchNumber)
 			monitoredProofHashTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
+			log := log.WithFields("monitoredProofHashTxID", monitoredProofHashTxID, "sequence", sequence)
 
 			_, status, err := a.State.GetTxBlockNum(a.ctx, monitoredProofTxID, nil)
 			if err != nil && err != state.ErrNotFound {
@@ -351,27 +358,27 @@ func (a *Aggregator) resendProofHash() {
 
 			_, status, err = a.State.GetTxBlockNum(a.ctx, monitoredProofHashTxID, nil)
 			if err != nil {
-				log.Debugf("failed to get tx block number. monitoredTxID = %s, err = %v", monitoredProofHashTxID, err)
+				log.Debugf("failed to get tx block number. err = %v", err)
 				tmp = sequence.ToBatchNumber
 				continue
 			}
 
 			firstProofHashBlockNumber, err := a.Ethman.GetSequencedBatch(sequence.ToBatchNumber)
 			if err != nil {
-				log.Debugf("failed to query first proof hash block number. err: %v, monitoredProofTxID: %s", err, monitoredProofTxID)
+				log.Debugf("failed to query first proof hash block number. err: %v: %s", err)
 				continue
 			}
 
 			if firstProofHashBlockNumber == 0 {
 				if status == ethtxmanager.MonitoredTxStatusFailed.String() {
 					if err := a.EthTxManager.UpdateId(a.ctx, monitoredProofHashTxID, nil); err != nil {
-						log.Debugf("failed to update monitored ProofHash tx id. monitoredProofHashTxID: %s, err: %v", monitoredProofHashTxID, err)
+						log.Debugf("failed to update monitored ProofHash tx id. err: %v", err)
 					}
 				}
 				continue
 			}
 
-			log.Infof("proofHashTxBlockNumber : %v, monitoredTxID: %s", firstProofHashBlockNumber, monitoredProofHashTxID)
+			log.Infof("proofHashTxBlockNumber : %v", firstProofHashBlockNumber)
 
 			if (firstProofHashBlockNumber + commitEpoch) > curBlockNumber {
 				if (firstProofHashBlockNumber + uint64(a.proofHashCommitEpoch)) < curBlockNumber {
@@ -388,10 +395,10 @@ func (a *Aggregator) resendProofHash() {
 			}
 
 			if err := a.EthTxManager.UpdateId(a.ctx, monitoredProofHashTxID, nil); err != nil {
-				log.Debugf("failed to update monitored ProofHash tx id. monitoredProofHashTxID: %s, err: %v", monitoredProofHashTxID, err)
+				log.Debugf("failed to update monitored ProofHash tx id. err: %v", err)
 				continue
 			}
-			log.Infof("resend proof hash tx end. monitoredProofHashTxID: %s", monitoredProofHashTxID)
+			log.Infof("resend proof hash tx end.")
 			tmp = sequence.ToBatchNumber
 		}
 
@@ -556,10 +563,6 @@ func (a *Aggregator) sendFinalProof() {
 			}
 
 			log.Infof("finalProofMsgs size: %d", len(finalProofMsgs))
-			for i := 0; i < len(finalProofMsgs); i++ {
-				log.Debugf("finalProofMsgs. index: %d, BatchNumber:%d, BatchNumberFinal: %d", i, finalProofMsgs[i].recursiveProof.BatchNumber, finalProofMsgs[i].recursiveProof.BatchNumberFinal)
-			}
-
 			if commitProoHashBatchNum <= lastVerifiedEthBatchNum {
 				commitProoHashBatchNum = lastVerifiedEthBatchNum
 			}
@@ -1012,26 +1015,45 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 			msg.recursiveProof = proof
 			msg.finalProof = &pb.FinalProof{Proof: stateFinalProof.FinalProof}
 		} else {
+			a.buildFinalProofBatchNumMutex.Lock()
+			batchNum := a.buildFinalProofBatchNum
+			if a.buildFinalProofBatchNum <= lastVerifiedBatchNum {
+				batchNum = lastVerifiedBatchNum
+			}
+
+			_, err := a.State.GetSequence(a.ctx, batchNum+1, nil)
+			if err != nil {
+				a.buildFinalProofBatchNumMutex.Unlock()
+				log.Warnf("failed to get sequence. err: %v", err)
+				return false, err
+			}
+
 			// we don't have a proof generating at the moment, check if we
 			// have a proof ready to verify
-			proof, err = a.getAndLockProofReadyToVerify(ctx, prover, lastVerifiedBatchNum)
+			proof, err = a.getAndLockProofReadyToVerify(ctx, prover, batchNum)
 			if errors.Is(err, state.ErrNotFound) {
 				// nothing to verify, swallow the error
 				// log.Debugf("No proof ready to verify. lastVerifiedBatchNum: %d", lastVerifiedBatchNum)
-				log.Debugf("No proof ready to verify. batchNum: %d", lastVerifiedBatchNum+1)
+				log.Debugf("No proof ready to verify. batchNum: %d", batchNum+1)
+				a.buildFinalProofBatchNumMutex.Unlock()
 				return false, nil
 			}
 
 			if err != nil {
 				log.Errorf("failed to get and lock proof ready to verify. err: %v", err)
+				a.buildFinalProofBatchNumMutex.Unlock()
 				return false, err
 			}
 
 			if !json.Valid([]byte(proof.Proof)) {
 				err = fmt.Errorf("invalid json. BatchNumberFinal: %d", proof.BatchNumberFinal)
 				log.Error(err)
+				a.buildFinalProofBatchNumMutex.Unlock()
 				return false, err
 			}
+
+			a.buildFinalProofBatchNum = proof.BatchNumberFinal
+			a.buildFinalProofBatchNumMutex.Unlock()
 
 			msg = finalProofMsg{
 				proverName: proverName,
