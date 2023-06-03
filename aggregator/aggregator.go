@@ -81,13 +81,12 @@ type Aggregator struct {
 	ctx  context.Context
 	exit context.CancelFunc
 
-	buildFinalProofBatchNumMutex *sync.Mutex
-	buildFinalProofBatchNum      uint64
-
 	monitoredProofHashTxLock *sync.Mutex
 	monitoredProofHashTx     map[string]bool
 	txsMutex                 *sync.Mutex
 	txs                      map[string]bool
+	finalProofMutex          *sync.Mutex
+	finalProofs              map[uint64]bool
 	proofHashCommitEpoch     uint8
 	proofCommitEpoch         uint8
 }
@@ -120,23 +119,25 @@ func New(
 	a := Aggregator{
 		cfg: cfg,
 
-		State:                        stateInterface,
-		EthTxManager:                 ethTxManager,
-		Ethman:                       etherman,
-		ProfitabilityChecker:         profitabilityChecker,
-		StateDBMutex:                 &sync.Mutex{},
-		TimeSendFinalProofMutex:      &sync.RWMutex{},
-		TimeSendFinalProofHashMutex:  &sync.RWMutex{},
-		buildFinalProofBatchNumMutex: &sync.Mutex{},
-		TimeCleanupLockedProofs:      cfg.CleanupLockedProofsInterval,
+		State:                       stateInterface,
+		EthTxManager:                ethTxManager,
+		Ethman:                      etherman,
+		ProfitabilityChecker:        profitabilityChecker,
+		StateDBMutex:                &sync.Mutex{},
+		TimeSendFinalProofMutex:     &sync.RWMutex{},
+		TimeSendFinalProofHashMutex: &sync.RWMutex{},
+		TimeCleanupLockedProofs:     cfg.CleanupLockedProofsInterval,
 
 		finalProof:               make(chan finalProofMsg, 10240),
 		proofHashCH:              make(chan proofHash, 10240),
 		monitoredProofHashTxLock: &sync.Mutex{},
 		monitoredProofHashTx:     make(map[string]bool),
 
-		txsMutex:             &sync.Mutex{},
-		txs:                  make(map[string]bool, 0),
+		txsMutex:        &sync.Mutex{},
+		txs:             make(map[string]bool, 0),
+		finalProofMutex: &sync.Mutex{},
+		finalProofs:     make(map[uint64]bool, 0),
+
 		proofHashCommitEpoch: proofHashCommitEpoch,
 		proofCommitEpoch:     proofCommitEpoch,
 	}
@@ -226,13 +227,13 @@ func (a *Aggregator) sendGenerateFinalProof() {
 			break
 		}
 		monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
-		a.monitoredProofHashTxLock.Lock()
-		if _, ok := a.monitoredProofHashTx[monitoredTxID]; ok {
-			a.monitoredProofHashTxLock.Unlock()
+		a.finalProofMutex.Lock()
+		if _, ok := a.finalProofs[sequence.ToBatchNumber]; ok {
+			a.finalProofMutex.Unlock()
 			lastVerifiedBatchNum = sequence.ToBatchNumber
 			continue
 		}
-		a.monitoredProofHashTxLock.Unlock()
+		a.finalProofMutex.Unlock()
 		stateFinalProof, errFinalProof := a.State.GetFinalProofByMonitoredId(a.ctx, monitoredTxID, nil)
 		if errFinalProof != nil {
 			lastVerifiedBatchNum = sequence.ToBatchNumber
@@ -507,18 +508,19 @@ func (h finalProofMsgList) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 // - clean up the cache of recursive proofs
 
 func (a *Aggregator) sendFinalProof() {
-	var lock sync.Mutex
 	finalProofMsgs := make(finalProofMsgList, 0)
 	tick := time.NewTicker(time.Second * 1)
 	blockNumber := uint64(0)
 	commitProoHashBatchNum := uint64(0)
-	monitoredProofHashTx := make(map[uint64]bool, 0)
 	go func() {
 		for {
 			select {
 			case <-a.ctx.Done():
 				return
 			case msg := <-a.finalProof:
+				if _, ok := a.finalProofs[msg.recursiveProof.BatchNumberFinal]; ok {
+					continue
+				}
 				log.Debugf("len:%d recv finalProof. BatchNumber:%d, BatchNumberFinal: %d", len(a.finalProof), msg.recursiveProof.BatchNumber, msg.recursiveProof.BatchNumberFinal)
 				lastVerifiedEthBatchNum, err := a.Ethman.GetLatestVerifiedBatchNum()
 				if err != nil {
@@ -529,15 +531,11 @@ func (a *Aggregator) sendFinalProof() {
 					continue
 				}
 
-				lock.Lock()
-				if _, ok := monitoredProofHashTx[msg.recursiveProof.BatchNumberFinal]; ok {
-					lock.Unlock()
-					continue
-				}
-				monitoredProofHashTx[msg.recursiveProof.BatchNumberFinal] = true
+				a.finalProofMutex.Lock()
+				a.finalProofs[msg.recursiveProof.BatchNumberFinal] = true
 				finalProofMsgs = append(finalProofMsgs, msg)
 				sort.Sort(finalProofMsgs)
-				lock.Unlock()
+				a.finalProofMutex.Unlock()
 			}
 		}
 	}()
@@ -579,7 +577,7 @@ func (a *Aggregator) sendFinalProof() {
 
 				blockNumber = curBlockNumber
 
-				lock.Lock()
+				a.finalProofMutex.Lock()
 				msg := finalProofMsgs[0]
 				if (commitProoHashBatchNum + 1) != msg.recursiveProof.BatchNumber {
 					if commitProoHashBatchNum >= msg.recursiveProof.BatchNumberFinal {
@@ -589,12 +587,12 @@ func (a *Aggregator) sendFinalProof() {
 							finalProofMsgs = make(finalProofMsgList, 0)
 						}
 
-						delete(monitoredProofHashTx, msg.recursiveProof.BatchNumberFinal)
+						delete(a.finalProofs, msg.recursiveProof.BatchNumberFinal)
 						log.Debugf("delete from finalProofMsgs. lastVerifiedEthBatchNum: %d, msg.recursiveProof.BatchNumberFinal: %d, finalProofMsgs size: %d", lastVerifiedEthBatchNum, msg.recursiveProof.BatchNumberFinal, len(finalProofMsgs))
 					}
 
 					log.Debugf("wait commit . current commit proof init hash batch num. %d, coming: %d", commitProoHashBatchNum, msg.recursiveProof.BatchNumber)
-					lock.Unlock()
+					a.finalProofMutex.Unlock()
 					continue
 				}
 				if finalProofMsgs.Len() > 1 {
@@ -602,7 +600,7 @@ func (a *Aggregator) sendFinalProof() {
 				} else {
 					finalProofMsgs = make(finalProofMsgList, 0)
 				}
-				lock.Unlock()
+				a.finalProofMutex.Unlock()
 				ctx := a.ctx
 				proof := msg.recursiveProof
 				log.WithFields("proofId", proof.ProofID, "batches", fmt.Sprintf("%d-%d", proof.BatchNumber, proof.BatchNumberFinal))
@@ -650,9 +648,9 @@ func (a *Aggregator) sendFinalProof() {
 					delete(a.txs, monitoredTxID)
 					a.txsMutex.Unlock()
 
-					lock.Lock()
-					delete(monitoredProofHashTx, proof.BatchNumberFinal)
-					lock.Unlock()
+					a.finalProofMutex.Lock()
+					delete(a.finalProofs, proof.BatchNumberFinal)
+					a.finalProofMutex.Unlock()
 
 					a.monitoredProofHashTxLock.Lock()
 					if b, ok := a.monitoredProofHashTx[monitoredTxID]; ok && b {
@@ -771,9 +769,9 @@ func (a *Aggregator) sendFinalProof() {
 				delete(a.txs, proofHash.monitoredProofHashTxID)
 				a.txsMutex.Unlock()
 
-				lock.Lock()
-				delete(monitoredProofHashTx, proverProof.FinalNewBatch)
-				lock.Unlock()
+				a.finalProofMutex.Lock()
+				delete(a.finalProofs, proverProof.FinalNewBatch)
+				a.finalProofMutex.Unlock()
 
 				a.monitoredProofHashTxLock.Lock()
 				if b, ok := a.monitoredProofHashTx[proofHash.monitoredProofHashTxID]; ok && b {
@@ -795,9 +793,9 @@ func (a *Aggregator) sendFinalProof() {
 			delete(a.txs, proofHash.monitoredProofHashTxID)
 			a.txsMutex.Unlock()
 
-			lock.Lock()
-			delete(monitoredProofHashTx, proverProof.FinalNewBatch)
-			lock.Unlock()
+			a.finalProofMutex.Lock()
+			delete(a.finalProofs, proverProof.FinalNewBatch)
+			a.finalProofMutex.Unlock()
 
 			a.monitoredProofHashTxLock.Lock()
 			if b, ok := a.monitoredProofHashTx[proofHash.monitoredProofHashTxID]; ok && b {
@@ -994,13 +992,13 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 		var errFinalProof error
 		monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
 		stateFinalProof, errFinalProof = a.State.GetFinalProofByMonitoredId(a.ctx, monitoredTxID, nil)
-		a.monitoredProofHashTxLock.Lock()
-		if _, ok := a.monitoredProofHashTx[monitoredTxID]; ok {
-			a.monitoredProofHashTxLock.Unlock()
+		a.finalProofMutex.Lock()
+		if _, ok := a.finalProofs[sequence.ToBatchNumber]; ok {
+			a.finalProofMutex.Unlock()
 			log.Debugf("The transaction is already on the send list. monitoredTxID: %s", monitoredTxID)
 			return true, nil
 		}
-		a.monitoredProofHashTxLock.Unlock()
+		a.finalProofMutex.Unlock()
 		if errFinalProof == nil {
 			msg = finalProofMsg{
 				proverName: proverName,
@@ -1064,6 +1062,12 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 		}()
 	} else {
 		monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proof.BatchNumber, proof.BatchNumberFinal)
+		a.finalProofMutex.Lock()
+		if _, ok := a.finalProofs[proof.BatchNumberFinal]; ok {
+			a.finalProofMutex.Unlock()
+			return true, nil
+		}
+		a.finalProofMutex.Unlock()
 		log.Infof("GetFinalProofByMonitoredId: %s", monitoredTxID)
 		stateFinalProof, err := a.State.GetFinalProofByMonitoredId(a.ctx, monitoredTxID, nil)
 		if err != nil && err != state.ErrNotFound {
