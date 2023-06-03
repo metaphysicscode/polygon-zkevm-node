@@ -1051,11 +1051,19 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 				batchNum = lastVerifiedBatchNum
 			}
 
-			_, err := a.State.GetSequence(a.ctx, batchNum+1, nil)
+			sequence, err := a.State.GetSequence(a.ctx, batchNum+1, nil)
 			if err != nil {
+				a.buildFinalProofBatchNum = lastVerifiedBatchNum
 				a.buildFinalProofBatchNumMutex.Unlock()
 				log.Warnf("failed to get sequence. err: %v", err)
 				return false, err
+			}
+
+			monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
+			if _, errFinalProof := a.State.GetFinalProofByMonitoredId(a.ctx, monitoredTxID, nil); errFinalProof == nil {
+				a.buildFinalProofBatchNum = sequence.ToBatchNumber
+				a.buildFinalProofBatchNumMutex.Unlock()
+				return false, nil
 			}
 
 			// we don't have a proof generating at the moment, check if we
@@ -1065,6 +1073,7 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 				// nothing to verify, swallow the error
 				// log.Debugf("No proof ready to verify. lastVerifiedBatchNum: %d", lastVerifiedBatchNum)
 				log.Debugf("No proof ready to verify. batchNum: %d", batchNum+1)
+				a.buildFinalProofBatchNum = sequence.ToBatchNumber
 				a.buildFinalProofBatchNumMutex.Unlock()
 				return false, nil
 			}
@@ -1078,7 +1087,12 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 			if !json.Valid([]byte(proof.Proof)) {
 				err = fmt.Errorf("invalid json. BatchNumberFinal: %d", proof.BatchNumberFinal)
 				log.Error(err)
+				a.buildFinalProofBatchNum = lastVerifiedBatchNum
 				a.buildFinalProofBatchNumMutex.Unlock()
+				err2 := a.State.DeleteGeneratedProofs(a.ctx, proof.BatchNumber, proof.BatchNumberFinal, nil)
+				if err2 != nil {
+					log.Errorf("Failed to delete proof in progress, err: %v", err2)
+				}
 				return false, err
 			}
 
@@ -1417,14 +1431,20 @@ func (a *Aggregator) tryAggregateProofs(ctx context.Context, prover proverInterf
 	}
 	if errFinalProof == state.ErrNotFound {
 		if !json.Valid([]byte(proof1.Proof)) {
-			err = fmt.Errorf("invalid json. BatchNumberFinal: %d", proof1.BatchNumberFinal)
+			err := fmt.Errorf("invalid json. proof1 BatchNumberFinal: %d", proof1.BatchNumberFinal)
 			log.Error(err)
+			if err := a.State.DeleteGeneratedProofs(a.ctx, proof1.BatchNumber, proof1.BatchNumberFinal, nil); err != nil {
+				log.Errorf("Failed to delete proof in progress, err: %v", err)
+			}
 			return false, err
 		}
 
 		if !json.Valid([]byte(proof2.Proof)) {
-			err = fmt.Errorf("invalid json. BatchNumberFinal: %d", proof2.BatchNumberFinal)
+			err := fmt.Errorf("invalid json. proof2 BatchNumberFinal: %d", proof2.BatchNumberFinal)
 			log.Error(err)
+			if err := a.State.DeleteGeneratedProofs(a.ctx, proof2.BatchNumber, proof2.BatchNumberFinal, nil); err != nil {
+				log.Errorf("Failed to delete proof in progress, err: %v", err)
+			}
 			return false, err
 		}
 
