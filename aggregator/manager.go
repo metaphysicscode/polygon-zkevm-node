@@ -36,6 +36,8 @@ type Aggregator struct {
 	proofHashCommitEpoch uint8
 	proofCommitEpoch     uint8
 
+	*GenerateProof
+
 	ctx  context.Context
 	exit context.CancelFunc
 }
@@ -65,6 +67,8 @@ func New(
 		log.Fatal(err)
 	}
 
+	generateProof := newGenerateProof(cfg, stateInterface, etherman)
+
 	a := Aggregator{
 		cfg: cfg,
 
@@ -76,6 +80,8 @@ func New(
 
 		proofHashCommitEpoch: proofHashCommitEpoch,
 		proofCommitEpoch:     proofCommitEpoch,
+
+		GenerateProof: generateProof,
 	}
 
 	return a, nil
@@ -103,6 +109,8 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize proofs cache %v", err)
 	}
+
+	a.GenerateProof.start(ctx)
 
 	<-ctx.Done()
 	return ctx.Err()
