@@ -16,6 +16,7 @@ type finalProofMsg struct {
 
 type proofHash struct {
 	hash                   string
+	batchNumber            uint64
 	batchNumberFinal       uint64
 	monitoredProofHashTxID string
 }

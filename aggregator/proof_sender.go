@@ -2,6 +2,7 @@ package aggregator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/0xPolygonHermez/zkevm-node/aggregator/pb"
 	"github.com/0xPolygonHermez/zkevm-node/encoding"
@@ -45,14 +46,17 @@ type ProofSender struct {
 	verifyingProof              bool
 	verifyingProofHash          bool
 
-	txsMutex *sync.Mutex
-	txs      map[string]bool
-
 	finalProofCh         <-chan finalProofMsg
 	proofHashCh          chan proofHash
 	sendFailProofMsgCh   chan<- sendFailProofMsg
 	proofHashCommitEpoch uint8
 	proofCommitEpoch     uint8
+}
+
+type proofHashSendTask struct {
+	msg                     *finalProofMsg
+	blockNumber             uint64
+	commitProofHashBatchNum uint64
 }
 
 func NewProofSender(
@@ -62,7 +66,7 @@ func NewProofSender(
 	EthTxManager ethTxManager,
 	etherMan etherman,
 	finalProofCh <-chan finalProofMsg,
-	sendFailProofMsg chan<- sendFailProofMsg,
+	sendFailProofMsgCh chan<- sendFailProofMsg,
 ) (ProofSender, error) {
 	proofHashCommitEpoch, err := etherMan.GetProofHashCommitEpoch()
 	if err != nil {
@@ -73,193 +77,31 @@ func NewProofSender(
 		log.Fatal(err)
 	}
 	return ProofSender{
-		ctx:                  ctx,
-		cfg:                  cfg,
-		state:                State,
-		ethTxManager:         EthTxManager,
-		etherMan:             etherMan,
-		finalProofCh:         finalProofCh,
-		proofHashCh:          make(chan proofHash, 10240),
-		sendFailProofMsgCh:   sendFailProofMsg,
-		proofHashCommitEpoch: proofHashCommitEpoch,
-		proofCommitEpoch:     proofCommitEpoch,
+		ctx:                         ctx,
+		cfg:                         cfg,
+		state:                       State,
+		ethTxManager:                EthTxManager,
+		etherMan:                    etherMan,
+		finalProofCh:                finalProofCh,
+		proofHashCh:                 make(chan proofHash, 10240),
+		TimeSendFinalProofMutex:     &sync.RWMutex{},
+		TimeSendFinalProofHashMutex: &sync.RWMutex{},
+		sendFailProofMsgCh:          sendFailProofMsgCh,
+		proofHashCommitEpoch:        proofHashCommitEpoch,
+		proofCommitEpoch:            proofCommitEpoch,
 	}, nil
 }
 
 func (sender *ProofSender) Start() {
 	log.Infof("Proof sender start. proofHashEpoch %d, proofEpoch: %d", sender.proofHashCommitEpoch, sender.proofCommitEpoch)
-	go sender.SendProofHash()
-	go sender.SendProof()
-}
-
-func (sender *ProofSender) SendProofHash() error {
-	var currentMsg *finalProofMsg
-	blockNumber := uint64(0)
-	commitProoHashBatchNum := uint64(0)
-	timeSleep := 1 * time.Second
-	for {
-		select {
-		case <-sender.ctx.Done():
-			log.Errorf("SendProofHash loop break, err: %v", sender.ctx.Err())
-			return sender.ctx.Err()
-		default:
-		}
-		time.Sleep(timeSleep)
-
-		if len(sender.txs) > 0 {
-			log.Debugf("wait send proof tx. txs size: %d", len(sender.txs))
-			continue
-		}
-
-		if currentMsg == nil {
-			select {
-			case msg := <-sender.finalProofCh:
-				currentMsg = &msg
-			default:
-			}
-		}
-
-		if currentMsg != nil {
-			lastVerifiedEthBatchNum, err := sender.etherMan.GetLatestVerifiedBatchNum()
-			if err != nil {
-				log.Warnf("Failed to get last eth batch on resendProofHash, err: %v", err)
-				continue
-			}
-			if commitProoHashBatchNum <= lastVerifiedEthBatchNum {
-				commitProoHashBatchNum = lastVerifiedEthBatchNum
-			}
-			curBlockNumber, err := sender.etherMan.GetLatestBlockNumber(sender.ctx)
-			if err != nil {
-				log.Errorf("Failed get last block by jsonrpc: %v", err)
-				continue
-			}
-
-			if blockNumber > 0 && (blockNumber+1) > curBlockNumber {
-				time.Sleep(3 * time.Second)
-				continue
-			}
-			blockNumber = curBlockNumber
-			if (commitProoHashBatchNum + 1) != currentMsg.recursiveProof.BatchNumber {
-				log.Debugf("wait commit . current commit proof init hash batch num. %d, coming: %d", commitProoHashBatchNum, currentMsg.recursiveProof.BatchNumber)
-				time.Sleep(3 * time.Second)
-				continue
-			}
-
-			// create proof_hash
-			proof := currentMsg.recursiveProof
-			log.WithFields("proofId", proof.ProofID, "batches", fmt.Sprintf("%d-%d", proof.BatchNumber, proof.BatchNumberFinal))
-			sha3 := solsha3.SoliditySHA3(currentMsg.finalProof.Proof)
-			pack := solsha3.Pack([]string{"string", "address"}, []interface{}{
-				sha3,
-				common.HexToAddress(sender.cfg.SenderAddress),
-			})
-			hash := crypto.Keccak256Hash(pack)
-			monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proof.BatchNumber, proof.BatchNumberFinal)
-
-			sender.StartProofHash()
-
-			finalBatch, err := sender.state.GetBatchByNumber(sender.ctx, proof.BatchNumberFinal, nil)
-			if err != nil {
-				log.Errorf("Failed to retrieve batch with number [%d]: %v", proof.BatchNumberFinal, err)
-				sender.EndProofHash()
-				continue
-			}
-
-			// query
-			to, data, err := sender.etherMan.BuildProofHashTxData(proof.BatchNumber-1, proof.BatchNumberFinal, hash)
-			if err != nil {
-				log.Errorf("Error estimating proof hash to add to eth tx manager: %v", err)
-				sender.EndProofHash()
-				// a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
-				continue
-			}
-			err = sender.ethTxManager.Add(sender.ctx, ethTxManagerOwner, monitoredTxID, common.HexToAddress(sender.cfg.SenderAddress), to, nil, data, nil)
-			if err != nil {
-				logObj := log.WithFields("tx", monitoredTxID)
-				logObj.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
-				sender.EndProofHash()
-				sender.txsMutex.Lock()
-				delete(sender.txs, monitoredTxID)
-				sender.txsMutex.Unlock()
-				continue
-			}
-
-			sender.ethTxManager.ProcessPendingMonitoredTxs(sender.ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
-				if result.Status == ethtxmanager.MonitoredTxStatusFailed {
-					resultLog := log.WithFields("owner", ethTxManagerOwner, "id", result.ID)
-					resultLog.Error("failed to send proof hash, TODO: review this fatal and define what to do in this case")
-					if err := sender.ethTxManager.UpdateId(sender.ctx, result.ID, nil); err != nil {
-						resultLog.Error(err)
-					}
-
-					stateFinalProof, errFinalProof := sender.state.GetFinalProofByMonitoredId(sender.ctx, result.ID, nil)
-					if errFinalProof == nil {
-						// monitoredIDFormat: "proof-hash-from-%v-to-%v"
-						idSlice := strings.Split(result.ID, "-")
-						proofBatchNumberStr := idSlice[3]
-						proofBatchNumber, err := strconv.ParseUint(proofBatchNumberStr, encoding.Base10, 0)
-						if err != nil {
-							log.Errorf("failed to read final proof batch number from monitored tx: %v", err)
-							return
-						}
-
-						proofBatchNumberFinalStr := idSlice[5]
-						proofBatchNumberFinal, err := strconv.ParseUint(proofBatchNumberFinalStr, encoding.Base10, 0)
-						if err != nil {
-							log.Errorf("failed to read final proof batch number final from monitored tx: %v", err)
-							return
-						}
-
-						msg := finalProofMsg{}
-						proof := &state.Proof{
-							BatchNumber:      proofBatchNumber,
-							BatchNumberFinal: proofBatchNumberFinal,
-							ProofID:          &stateFinalProof.FinalProofId,
-						}
-						msg.recursiveProof = proof
-						msg.finalProof = &pb.FinalProof{Proof: stateFinalProof.FinalProof}
-						// TODO
-						fmt.Println(proof)
-					}
-				}
-			}, nil)
-
-			proverProof, err := sender.state.GetProverProofByHash(sender.ctx, hash.String(), proof.BatchNumberFinal, nil)
-			log.Infof("monitoredTxID = %s, hash = %s, proverProof = %v", monitoredTxID, hash.String(), proverProof)
-			if err != nil || proverProof == nil {
-				if err := sender.state.AddProverProof(sender.ctx, &state.ProverProof{
-					InitNumBatch:  proof.BatchNumber,
-					FinalNewBatch: proof.BatchNumberFinal,
-					NewStateRoot:  finalBatch.StateRoot,
-					LocalExitRoot: finalBatch.LocalExitRoot,
-					Proof:         currentMsg.finalProof.Proof,
-					ProofHash:     hash,
-				}, nil); err != nil {
-					logObj := log.WithFields("tx", monitoredTxID)
-					logObj.Errorf("Error to add prover proof to db: %v", err)
-					sender.EndProofHash()
-					// a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
-					continue
-				}
-			}
-
-			sender.ResetVerifyProofHashTime()
-			sender.EndProofHash()
-			commitProoHashBatchNum = currentMsg.recursiveProof.BatchNumberFinal
-			currentMsg = nil
-			go sender.monitorSendProof(proof.BatchNumber, proof.BatchNumberFinal, monitoredTxID)
-		}
-	}
-}
-
-func (sender *ProofSender) SendProof() error {
-	timeSleep := 1 * time.Second
+	proofHashSendTask := proofHashSendTask{}
 	var proofHash *proofHash = nil
+	timeSleep := 1 * time.Second
 	for {
 		select {
 		case <-sender.ctx.Done():
-			log.Errorf("SendProof loop break, err: %v", sender.ctx.Err())
-			return sender.ctx.Err()
+			log.Errorf("Send job loop break, err: %v", sender.ctx.Err())
+			return
 		default:
 		}
 		time.Sleep(timeSleep)
@@ -270,77 +112,260 @@ func (sender *ProofSender) SendProof() error {
 			default:
 			}
 		}
+		// 优先proof
+		if proofHash == nil && proofHashSendTask.msg == nil {
+			select {
+			case msg := <-sender.finalProofCh:
+				proofHashSendTask.msg = &msg
+			default:
+			}
+		}
 
 		if proofHash != nil {
-			proverProof, err := sender.state.GetProverProofByHash(sender.ctx, proofHash.hash, proofHash.batchNumberFinal, nil)
-			if err != nil {
-				log.Errorf("Error to get prover proof: %v", err)
-				proofHashBlockNum, err := sender.etherMan.GetSequencedBatch(proofHash.batchNumberFinal)
-				if err != nil {
-					log.Errorf("failed to get block number for first proof hash")
-					continue
-				}
-
-				blockNumber, err := sender.etherMan.GetLatestBlockNumber(sender.ctx)
-				if err != nil {
-					log.Errorf("Failed get last block by jsonrpc: %v", err)
-					continue
-				}
-				commitEpoch := uint64(sender.proofHashCommitEpoch + sender.proofCommitEpoch)
-				if (proofHashBlockNum + commitEpoch) < blockNumber {
-					sender.txsMutex.Lock()
-					delete(sender.txs, proofHash.monitoredProofHashTxID)
-					sender.txsMutex.Unlock()
-					continue
-				}
-				continue
-			}
-			logObj := log.WithFields("batches", fmt.Sprintf("%d-%d", proverProof.InitNumBatch, proverProof.FinalNewBatch))
-			logObj.Info("Verifying final proof with ethereum smart contract")
-
-			sender.StartProofVerification()
-
-			inputs := ethmanTypes.FinalProofInputs{
-				FinalProof:       &pb.FinalProof{Proof: proverProof.Proof},
-				NewLocalExitRoot: proverProof.LocalExitRoot.Bytes(),
-				NewStateRoot:     proverProof.NewStateRoot.Bytes(),
-			}
-
-			logObj.Infof("Final proof inputs: NewLocalExitRoot [%#x], NewStateRoot [%#x]", inputs.NewLocalExitRoot, inputs.NewStateRoot)
-
-			// add batch verification to be monitored
-			to, data, err := sender.etherMan.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
-			if err != nil {
-				logObj.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
-				sender.EndProofVerification()
-				continue
-			}
-
-			monitoredTxID := buildMonitoredTxID(proverProof.InitNumBatch, proverProof.FinalNewBatch)
-			err = sender.ethTxManager.Add(sender.ctx, ethTxManagerOwner, monitoredTxID,
-				common.HexToAddress(sender.cfg.SenderAddress), to, nil, data, nil)
-			if err != nil {
-				logObj := log.WithFields("tx", monitoredTxID)
-				logObj.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
-				sender.EndProofVerification()
-				sender.ResetVerifyProofTime()
-				sender.txsMutex.Lock()
-				delete(sender.txs, proofHash.monitoredProofHashTxID)
-				sender.txsMutex.Unlock()
-				continue
-			}
-			// process monitored batch verifications before starting a next cycle
-			sender.ethTxManager.ProcessPendingMonitoredTxs(sender.ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
-				sender.handleMonitoredTxResult(result)
-			}, nil)
-
-			sender.ResetVerifyProofTime()
-			sender.EndProofVerification()
-			sender.txsMutex.Lock()
-			delete(sender.txs, proofHash.monitoredProofHashTxID)
-			sender.txsMutex.Unlock()
+			proofHash, _ = sender.SendProof(proofHash)
+		}
+		if proofHashSendTask.msg != nil {
+			_ = sender.SendProofHash(&proofHashSendTask)
 		}
 	}
+}
+
+func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
+	currentMsg := task.msg
+	lastVerifiedEthBatchNum, err := sender.etherMan.GetLatestVerifiedBatchNum()
+	if err != nil {
+		log.Warnf("Failed to get last eth batch on resendProofHash, err: %v", err)
+		return err
+	}
+	if task.commitProofHashBatchNum <= lastVerifiedEthBatchNum {
+		task.commitProofHashBatchNum = lastVerifiedEthBatchNum
+	}
+	curBlockNumber, err := sender.etherMan.GetLatestBlockNumber(sender.ctx)
+	if err != nil {
+		log.Errorf("Failed get last block by jsonrpc: %v", err)
+		return err
+	}
+
+	if task.blockNumber > 0 && (task.blockNumber+1) > curBlockNumber {
+		time.Sleep(3 * time.Second)
+		return nil
+	}
+	task.blockNumber = curBlockNumber
+	if (task.commitProofHashBatchNum + 1) > currentMsg.recursiveProof.BatchNumber {
+		errMsg := fmt.Sprintf("Receive pre msg, bach expc:%v, get:%v", task.commitProofHashBatchNum+1, currentMsg.recursiveProof.BatchNumber)
+		log.Warnf(errMsg)
+		task.msg = nil
+		return errors.New(errMsg)
+	}
+
+	if (task.commitProofHashBatchNum + 1) < currentMsg.recursiveProof.BatchNumber {
+		errMsg := fmt.Sprintf("Receive future msg, bach expc:%v, get:%v", task.commitProofHashBatchNum+1, currentMsg.recursiveProof.BatchNumber)
+		log.Warnf(errMsg)
+		return errors.New(errMsg)
+	}
+
+	proof := currentMsg.recursiveProof
+	sequenceBlockNum, err := sender.etherMan.GetSequencedBatch(proof.BatchNumberFinal)
+	if err != nil {
+		log.Errorf("failed to get block number for first proof hash, err:v", err)
+		return err
+	}
+
+	// 超过批次, 默认 curBlockNumber > sequenceBlockNum
+	if (curBlockNumber-sequenceBlockNum)%uint64(sender.proofCommitEpoch+sender.proofHashCommitEpoch) > uint64(sender.proofHashCommitEpoch) {
+		failMsg := sendFailProofMsg{
+			proof.BatchNumber,
+			proof.BatchNumberFinal,
+		}
+		sender.sendFailProofMsgCh <- failMsg
+		errMsg := fmt.Sprintf("Send proof hash expired, current blockNumber: %v, sequenceBatch %v, need to resend", curBlockNumber, sequenceBlockNum)
+		log.Warn(errMsg)
+		task.msg = nil
+		return errors.New(errMsg)
+	}
+
+	// create proof_hash
+	log.WithFields("proofId", proof.ProofID, "batches", fmt.Sprintf("%d-%d", proof.BatchNumber, proof.BatchNumberFinal))
+	sha3 := solsha3.SoliditySHA3(currentMsg.finalProof.Proof)
+	pack := solsha3.Pack([]string{"string", "address"}, []interface{}{
+		sha3,
+		common.HexToAddress(sender.cfg.SenderAddress),
+	})
+	hash := crypto.Keccak256Hash(pack)
+	monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proof.BatchNumber, proof.BatchNumberFinal)
+
+	sender.StartProofHash()
+
+	finalBatch, err := sender.state.GetBatchByNumber(sender.ctx, proof.BatchNumberFinal, nil)
+	if err != nil {
+		log.Errorf("Failed to retrieve batch with number [%d]: %v", proof.BatchNumberFinal, err)
+		sender.EndProofHash()
+		return err
+	}
+
+	proverProof, err := sender.state.GetProverProofByHash(sender.ctx, hash.String(), proof.BatchNumberFinal, nil)
+	log.Infof("monitoredTxID = %s, hash = %s, proverProof = %v", monitoredTxID, hash.String(), proverProof)
+	if err != nil || proverProof == nil {
+		if err := sender.state.AddProverProof(sender.ctx, &state.ProverProof{
+			InitNumBatch:  proof.BatchNumber,
+			FinalNewBatch: proof.BatchNumberFinal,
+			NewStateRoot:  finalBatch.StateRoot,
+			LocalExitRoot: finalBatch.LocalExitRoot,
+			Proof:         currentMsg.finalProof.Proof,
+			ProofHash:     hash,
+		}, nil); err != nil {
+			logObj := log.WithFields("tx", monitoredTxID)
+			logObj.Errorf("Error to add prover proof to db: %v", err)
+			sender.EndProofHash()
+			return err
+		}
+	}
+
+	// query
+	to, data, err := sender.etherMan.BuildProofHashTxData(proof.BatchNumber-1, proof.BatchNumberFinal, hash)
+	if err != nil {
+		log.Errorf("Error estimating proof hash to add to eth tx manager: %v", err)
+		sender.EndProofHash()
+		// a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
+		return err
+	}
+	err = sender.ethTxManager.Add(sender.ctx, ethTxManagerOwner, monitoredTxID, common.HexToAddress(sender.cfg.SenderAddress), to, nil, data, nil)
+	if err != nil {
+		logObj := log.WithFields("tx", monitoredTxID)
+		logObj.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
+		sender.EndProofHash()
+		return err
+	}
+
+	var finalProofMsgResend *finalProofMsg = nil
+	sender.ethTxManager.ProcessPendingMonitoredTxs(sender.ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
+		if result.Status == ethtxmanager.MonitoredTxStatusFailed {
+			resultLog := log.WithFields("owner", ethTxManagerOwner, "id", result.ID)
+			resultLog.Error("failed to send proof hash, TODO: review this fatal and define what to do in this case")
+			if err := sender.ethTxManager.UpdateId(sender.ctx, result.ID, nil); err != nil {
+				resultLog.Error(err)
+			}
+
+			stateFinalProof, errFinalProof := sender.state.GetFinalProofByMonitoredId(sender.ctx, result.ID, nil)
+			if errFinalProof == nil {
+				// monitoredIDFormat: "proof-hash-from-%v-to-%v"
+				idSlice := strings.Split(result.ID, "-")
+				proofBatchNumberStr := idSlice[3]
+				proofBatchNumber, err := strconv.ParseUint(proofBatchNumberStr, encoding.Base10, 0)
+				if err != nil {
+					log.Errorf("failed to read final proof batch number from monitored tx: %v", err)
+					return
+				}
+
+				proofBatchNumberFinalStr := idSlice[5]
+				proofBatchNumberFinal, err := strconv.ParseUint(proofBatchNumberFinalStr, encoding.Base10, 0)
+				if err != nil {
+					log.Errorf("failed to read final proof batch number final from monitored tx: %v", err)
+					return
+				}
+
+				msg := finalProofMsg{}
+				proof := &state.Proof{
+					BatchNumber:      proofBatchNumber,
+					BatchNumberFinal: proofBatchNumberFinal,
+					ProofID:          &stateFinalProof.FinalProofId,
+				}
+				msg.recursiveProof = proof
+				msg.finalProof = &pb.FinalProof{Proof: stateFinalProof.FinalProof}
+				finalProofMsgResend = &msg
+			}
+		}
+	}, nil)
+	if finalProofMsgResend != nil {
+		task.msg = finalProofMsgResend
+		errMsg := fmt.Sprintf("Resend msg:%s, %s, [%d, %d] ", task.msg.proverName, task.msg.proverID,
+			task.msg.recursiveProof.BatchNumber, task.msg.recursiveProof.BatchNumberFinal)
+		log.Warn(errMsg)
+		return errors.New(errMsg)
+	}
+
+	sender.ResetVerifyProofHashTime()
+	sender.EndProofHash()
+	task.commitProofHashBatchNum = currentMsg.recursiveProof.BatchNumberFinal
+	task.msg = nil
+	go sender.monitorSendProof(proof.BatchNumber, proof.BatchNumberFinal, monitoredTxID)
+	return nil
+}
+
+func (sender *ProofSender) SendProof(proofHash *proofHash) (*proofHash, error) {
+	proofHashBlockNum, err := sender.etherMan.GetSequencedBatch(proofHash.batchNumberFinal)
+	if err != nil {
+		log.Errorf("failed to get block number for first proof hash")
+		return proofHash, err
+	}
+
+	blockNumber, err := sender.etherMan.GetLatestBlockNumber(sender.ctx)
+	if err != nil {
+		log.Errorf("Failed get last block by jsonrpc: %v", err)
+		return proofHash, err
+	}
+
+	commitEpoch := uint64(sender.proofHashCommitEpoch + sender.proofCommitEpoch)
+	if (proofHashBlockNum + commitEpoch) < blockNumber {
+		if (blockNumber-proofHashBlockNum)%commitEpoch < uint64(sender.proofHashCommitEpoch) {
+			failMsg := sendFailProofMsg{
+				proofHash.batchNumber,
+				proofHash.batchNumberFinal,
+			}
+			sender.sendFailProofMsgCh <- failMsg
+			errMsg := fmt.Sprintf("Send proof hash expired, current blockNumber: %v, sequenceBatch %v, need to resend", blockNumber, proofHashBlockNum)
+			log.Warn(errMsg)
+			return nil, errors.New(errMsg)
+		}
+	}
+
+	proverProof, err := sender.state.GetProverProofByHash(sender.ctx, proofHash.hash, proofHash.batchNumberFinal, nil)
+	if err != nil {
+		log.Errorf("Error to get prover proof: %v", err)
+		return proofHash, err
+	}
+	logObj := log.WithFields("batches", fmt.Sprintf("%d-%d", proverProof.InitNumBatch, proverProof.FinalNewBatch))
+	logObj.Info("Verifying final proof with ethereum smart contract")
+
+	sender.StartProofVerification()
+
+	inputs := ethmanTypes.FinalProofInputs{
+		FinalProof:       &pb.FinalProof{Proof: proverProof.Proof},
+		NewLocalExitRoot: proverProof.LocalExitRoot.Bytes(),
+		NewStateRoot:     proverProof.NewStateRoot.Bytes(),
+	}
+
+	logObj.Infof("Final proof inputs: NewLocalExitRoot [%#x], NewStateRoot [%#x]", inputs.NewLocalExitRoot, inputs.NewStateRoot)
+
+	// add batch verification to be monitored
+	to, data, err := sender.etherMan.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
+	if err != nil {
+		logObj.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
+		sender.EndProofVerification()
+		return proofHash, err
+	}
+
+	monitoredTxID := buildMonitoredTxID(proverProof.InitNumBatch, proverProof.FinalNewBatch)
+	err = sender.ethTxManager.Add(sender.ctx, ethTxManagerOwner, monitoredTxID,
+		common.HexToAddress(sender.cfg.SenderAddress), to, nil, data, nil)
+	if err != nil {
+		logObj := log.WithFields("tx", monitoredTxID)
+		logObj.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
+		sender.EndProofVerification()
+		sender.ResetVerifyProofTime()
+
+		return proofHash, err
+	}
+	// process monitored batch verifications before starting a next cycle
+	sender.ethTxManager.ProcessPendingMonitoredTxs(sender.ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
+		sender.handleMonitoredTxResult(result)
+	}, nil)
+
+	sender.ResetVerifyProofTime()
+	sender.EndProofVerification()
+
+	return nil, nil
+
 }
 func (sender *ProofSender) handleMonitoredTxResult(result ethtxmanager.MonitoredTxResult) {
 	resLog := log.WithFields("owner", ethTxManagerOwner, "txId", result.ID)
@@ -399,21 +424,13 @@ func (sender *ProofSender) handleMonitoredTxResult(result ethtxmanager.Monitored
 			}
 			commitEpoch := uint64(sender.proofHashCommitEpoch + sender.proofCommitEpoch)
 			if proofHashBlockNum == 0 || (proofHashBlockNum+commitEpoch-2) < blockNumber {
-				//msg := finalProofMsg{}
-				//proof := &state.Proof{
-				//	BatchNumber:      proofBatchNumber,
-				//	BatchNumberFinal: proofBatchNumberFinal,
-				//	ProofID:          &stateFinalProof.FinalProofId,
-				//}
-				//msg.recursiveProof = proof
-				//msg.finalProof = &pb.FinalProof{Proof: stateFinalProof.FinalProof}
-				//
-				//a.finalProof <- msg
-				//TODO
+				failMsg := sendFailProofMsg{
+					proofBatchNumber,
+					proofBatchNumber,
+				}
+				sender.sendFailProofMsgCh <- failMsg
+				log.Warn("In handleMonitoredTxResult as  (proofHashBlockNum+commitEpoch-2) < blockNumber, call resend")
 			} else {
-				sender.txsMutex.Lock()
-				sender.txs[monitoredTxID] = true
-				sender.txsMutex.Unlock()
 				sha3 := solsha3.SoliditySHA3(stateFinalProof.FinalProof)
 				pack := solsha3.Pack([]string{"string", "address"}, []interface{}{
 					sha3,
@@ -421,9 +438,9 @@ func (sender *ProofSender) handleMonitoredTxResult(result ethtxmanager.Monitored
 				})
 
 				hash := crypto.Keccak256Hash(pack)
-				sender.proofHashCh <- proofHash{hash.Hex(), proofBatchNumberFinal, monitoredTxID}
+				sender.proofHashCh <- proofHash{hash.Hex(), proofBatchNumber,
+					proofBatchNumberFinal, monitoredTxID}
 			}
-
 		}
 		return
 	}
@@ -455,7 +472,7 @@ func (sender *ProofSender) handleMonitoredTxResult(result ethtxmanager.Monitored
 
 	// wait for the synchronizer to catch up the verified batches
 	resLog.Debug("A final proof has been sent, waiting for the network to be synced")
-	for !sender.isSynced(sender.ctx, &proofBatchNumberFinal) {
+	for !sender.IsSynced(sender.ctx, &proofBatchNumberFinal) {
 		log.Info("Waiting for synchronizer to sync...")
 		time.Sleep(sender.cfg.RetryTime.Duration)
 	}
@@ -468,7 +485,7 @@ func (sender *ProofSender) handleMonitoredTxResult(result ethtxmanager.Monitored
 	}
 }
 
-func (sender *ProofSender) isSynced(ctx context.Context, batchNum *uint64) bool {
+func (sender *ProofSender) IsSynced(ctx context.Context, batchNum *uint64) bool {
 	// get latest verified batch as seen by the synchronizer
 	lastVerifiedBatch, err := sender.state.GetLastVerifiedBatch(ctx, nil)
 	if err == state.ErrNotFound {
@@ -513,9 +530,6 @@ func (sender *ProofSender) monitorSendProof(batchNumber, batchNumberFinal uint64
 			return
 		case <-tick.C:
 			resLog := log.WithFields("monitorSendProof monitoredTxID", monitoredTxID)
-			if _, ok := sender.txs[monitoredTxID]; ok {
-				return
-			}
 			blockNumber, err := sender.etherMan.GetLatestBlockNumber(sender.ctx)
 			if err != nil {
 				resLog.Errorf("Failed get last block by jsonrpc: %v", err)
@@ -558,11 +572,8 @@ func (sender *ProofSender) monitorSendProof(batchNumber, batchNumberFinal uint64
 				resLog.Debugf("Failed get proof hash in monitorSendProof: %v, batchNumberFinal: %d", err, batchNumberFinal)
 				continue
 			}
-			sender.txsMutex.Lock()
-			sender.txs[monitoredTxID] = true
-			sender.txsMutex.Unlock()
 			resLog.Infof("build proof tx. hash: %s, batchNumberFinal: %d, monitoredTxID = %s", hash, batchNumberFinal, monitoredTxID)
-			sender.proofHashCh <- proofHash{hash, batchNumberFinal, monitoredTxID}
+			sender.proofHashCh <- proofHash{hash, batchNumber, batchNumberFinal, monitoredTxID}
 			return
 		}
 	}
