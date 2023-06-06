@@ -1,9 +1,12 @@
 package aggregator
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"time"
 
+	"github.com/0xPolygonHermez/zkevm-node/aggregator/metrics"
 	"github.com/0xPolygonHermez/zkevm-node/aggregator/pb"
 	"github.com/0xPolygonHermez/zkevm-node/config/types"
 )
@@ -32,6 +35,9 @@ type Aggregator struct {
 
 	proofHashCommitEpoch uint8
 	proofCommitEpoch     uint8
+
+	ctx  context.Context
+	exit context.CancelFunc
 }
 
 // New creates a new aggregator.
@@ -73,4 +79,31 @@ func New(
 	}
 
 	return a, nil
+}
+
+// Start starts the aggregator
+func (a *Aggregator) Start(ctx context.Context) error {
+	var cancel context.CancelFunc
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel = context.WithCancel(ctx)
+	a.ctx = ctx
+	a.exit = cancel
+
+	metrics.Register()
+
+	// process monitored batch verifications before starting
+	// a.EthTxManager.ProcessPendingMonitoredTxs(ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
+	// 	a.handleMonitoredTxResult(result)
+	// }, nil)
+
+	// Delete ungenerated recursive proofs
+	err := a.State.DeleteUngeneratedProofs(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize proofs cache %v", err)
+	}
+
+	<-ctx.Done()
+	return ctx.Err()
 }
