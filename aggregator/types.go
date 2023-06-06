@@ -20,6 +20,11 @@ type proofHash struct {
 	monitoredProofHashTxID string
 }
 
+type sendFailProofMsg struct {
+	BatchNumber      uint64
+	BatchNumberFinal uint64
+}
+
 type finalProofMsgList []finalProofMsg
 
 func (h finalProofMsgList) Len() int { return len(h) }
