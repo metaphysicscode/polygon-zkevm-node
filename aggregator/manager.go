@@ -107,3 +107,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	<-ctx.Done()
 	return ctx.Err()
 }
+
+func buildMonitoredTxID(batchNumber, batchNumberFinal uint64) string {
+	return fmt.Sprintf(monitoredIDFormat, batchNumber, batchNumberFinal)
+}

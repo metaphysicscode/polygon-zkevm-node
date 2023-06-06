@@ -17,3 +17,11 @@ type proofHash struct {
 	batchNumberFinal       uint64
 	monitoredProofHashTxID string
 }
+
+type finalProofMsgList []finalProofMsg
+
+func (h finalProofMsgList) Len() int { return len(h) }
+func (h finalProofMsgList) Less(i, j int) bool {
+	return h[i].recursiveProof.BatchNumberFinal < h[j].recursiveProof.BatchNumberFinal
+}
+func (h finalProofMsgList) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
