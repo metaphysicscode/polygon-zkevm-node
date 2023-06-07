@@ -224,7 +224,6 @@ func (a *Aggregator) sendGenerateFinalProof() {
 
 	for {
 		var msg finalProofMsg
-
 		sequence, err := a.State.GetSequence(a.ctx, lastVerifiedBatchNum+1, nil)
 		if err != nil && err != state.ErrStateNotSynchronized {
 			log.Debugf("failed to get sequence. err: %v", err)
@@ -234,6 +233,7 @@ func (a *Aggregator) sendGenerateFinalProof() {
 		if err == state.ErrStateNotSynchronized {
 			break
 		}
+
 		monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, sequence.FromBatchNumber, sequence.ToBatchNumber)
 		a.finalProofMutex.Lock()
 		if _, ok := a.finalProofs[sequence.ToBatchNumber]; ok {

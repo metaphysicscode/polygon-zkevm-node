@@ -73,4 +73,6 @@ type Config struct {
 	// which a proof in generating state is considered to be stuck and
 	// allowed to be cleared.
 	GeneratingProofCleanupThreshold string `mapstructure:"GeneratingProofCleanupThreshold"`
+
+	StartBatchNum uint64 `mapstructure:"StartBatchNum"`
 }
