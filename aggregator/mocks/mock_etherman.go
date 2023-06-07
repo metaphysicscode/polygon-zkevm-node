@@ -145,12 +145,52 @@ func (_m *Etherman) GetLatestVerifiedBatchNum() (uint64, error) {
 }
 
 
+// GetLatestBlockNumber provides a mock function with given fields: ctx
 func (_m *Etherman) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
-	return 1, nil
+	ret := _m.Called(ctx)
+
+	var r0 uint64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) (uint64, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) uint64); ok {
+		r0 = rf(ctx)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
-func (_m *Etherman) GetSequencedBatch(finalBatchNum uint64) (uint64, bool, error) {
-	return 0, false, nil
+// GetSequencedBatch provides a mock function with given fields: finalBatchNum
+func (_m *Etherman) GetSequencedBatch(finalBatchNum uint64) (uint64, error) {
+	ret := _m.Called(finalBatchNum)
+
+	var r0 uint64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(uint64) (uint64, error)); ok {
+		return rf(finalBatchNum)
+	}
+	if rf, ok := ret.Get(0).(func(uint64) uint64); ok {
+		r0 = rf(finalBatchNum)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	if rf, ok := ret.Get(1).(func(uint64) error); ok {
+		r1 = rf(finalBatchNum)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 func (_m *Etherman)  JudgeAggregatorDeposit(account common.Address) (bool, error) {

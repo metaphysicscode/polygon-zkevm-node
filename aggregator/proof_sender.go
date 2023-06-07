@@ -523,6 +523,7 @@ func (sender *ProofSender) IsSynced(ctx context.Context, batchNum *uint64) bool 
 }
 
 func (sender *ProofSender) monitorSendProof(batchNumber, batchNumberFinal uint64, monitoredTxID string) {
+	log.Infof("Start monitorSendProof, info: batchNumber:%v, batchNumberFinal:%v, monitoredTxID:%v ", batchNumber, batchNumberFinal, monitoredTxID)
 	tick := time.NewTicker(time.Second * 10)
 	for {
 		select {
@@ -559,7 +560,7 @@ func (sender *ProofSender) monitorSendProof(batchNumber, batchNumberFinal uint64
 			}
 
 			resLog.Infof("proofHashBlockNum = %d, max_commit_proof = %d, blockNumber =%d, monitoredTxID = %s", proofHashBlockNum, sender.proofHashCommitEpoch, blockNumber, monitoredTxID)
-			if proofHashBlockNum == 0 || (proofHashBlockNum+uint64(sender.proofHashCommitEpoch)) > blockNumber {
+			if proofHashBlockNum == 0 || (blockNumber-proofHashBlockNum)%uint64(sender.proofHashCommitEpoch+sender.proofCommitEpoch) < uint64(sender.proofHashCommitEpoch) {
 				continue
 			}
 
