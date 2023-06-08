@@ -46,6 +46,8 @@ type etherman interface {
 	GetLatestBlockNumber(ctx context.Context) (uint64, error)
 	JudgeAggregatorDeposit(account common.Address) (bool, error)
 	GetSequencedBatch(finalBatchNum uint64) (uint64, error)
+	GetProofHashCommitEpoch() (uint8, error)
+	GetProofCommitEpoch() (uint8, error)
 }
 
 // aggregatorTxProfitabilityChecker interface for different profitability

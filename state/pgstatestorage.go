@@ -1998,7 +1998,7 @@ func (p *PostgresStorage) GetSequences(ctx context.Context, lastVerifiedBatchNum
 func (p *PostgresStorage) GetSequence(ctx context.Context, lastVerifiedBatchNumber uint64, dbTx pgx.Tx) (Sequence, error) {
 	q := p.getExecQuerier(dbTx)
 	var sequence Sequence
-	getSequenceSQL := "SELECT from_batch_num, to_batch_num FROM state.sequences WHERE from_batch_num >= $1 and to_batch_num >= $1 ORDER BY from_batch_num ASC limit 1"
+	getSequenceSQL := "SELECT from_batch_num, to_batch_num FROM state.sequences WHERE from_batch_num <= $1 and to_batch_num >= $1 ORDER BY from_batch_num ASC limit 1"
 
 	err := q.QueryRow(ctx, getSequenceSQL, lastVerifiedBatchNumber).Scan(&sequence.FromBatchNumber, &sequence.ToBatchNumber)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -2443,25 +2443,9 @@ func (p *PostgresStorage) GetFinalProofByMonitoredId(ctx context.Context, monito
 
 func (p *PostgresStorage) AddProofHash(ctx context.Context, proofHash *ProofHash, dbTx pgx.Tx) error {
 	e := p.getExecQuerier(dbTx)
-	//final_new_batch sender proof_hash 查询在否，有更新，没有插入
-	const queryProofHashSQL = "select count(1) from state.proof_hash where sender = $1 and final_new_batch = $2 and proof_hash =$3"
-
-	var num uint64
-	err := e.QueryRow(ctx, queryProofHashSQL, proofHash.Sender.String(), proofHash.FinalNewBatch, proofHash.ProofHash.String()).Scan(&num)
-	if err != nil {
-		return err
-	}
-
-	if num == 0 {
-		const addProofHashSQL = "INSERT INTO state.proof_hash (block_num, sender, init_num_batch, final_new_batch, proof_hash) VALUES ($1, $2, $3, $4, $5)"
-		_, err := e.Exec(ctx, addProofHashSQL, proofHash.BlockNumber, proofHash.Sender.String(), proofHash.InitNumBatch, proofHash.FinalNewBatch, proofHash.ProofHash.String())
-		return err
-	} else {
-
-		const addProofHashSQL = "update state.proof_hash set block_num = $1 where sender = $2 and final_new_batch = $3 and proof_hash = $4)"
-		_, err := e.Exec(ctx, addProofHashSQL, proofHash.BlockNumber, proofHash.Sender.String(), proofHash.FinalNewBatch, proofHash.ProofHash.String())
-		return err
-	}
+	const addProofHashSQL = "INSERT INTO state.proof_hash (block_num, sender, init_num_batch, final_new_batch, proof_hash) VALUES ($1, $2, $3, $4, $5)"
+	_, err := e.Exec(ctx, addProofHashSQL, proofHash.BlockNumber, proofHash.Sender.String(), proofHash.InitNumBatch, proofHash.FinalNewBatch, proofHash.ProofHash.String())
+	return err
 }
 
 func (p *PostgresStorage) AddProverProof(ctx context.Context, proverProof *ProverProof, dbTx pgx.Tx) error {

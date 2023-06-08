@@ -549,6 +549,32 @@
       "inputs": [
         {
           "indexed": false,
+          "internalType": "uint8",
+          "name": "newProofCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "SetProofCommitEpoch",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "newProofHashCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "SetProofHashCommitEpoch",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
           "internalType": "address",
           "name": "newTrustedAggregator",
           "type": "address"
@@ -853,41 +879,9 @@
     },
     {
       "inputs": [],
-      "name": "commitNum",
-      "outputs": [
-        {
-          "internalType": "uint8",
-          "name": "",
-          "type": "uint8"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
       "name": "deactivateEmergencyState",
       "outputs": [],
       "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint64",
-          "name": "",
-          "type": "uint64"
-        }
-      ],
-      "name": "finalNewBatches",
-      "outputs": [
-        {
-          "internalType": "uint64",
-          "name": "",
-          "type": "uint64"
-        }
-      ],
-      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -1360,6 +1354,32 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "proofCommitEpoch",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "proofHashCommitEpoch",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -1636,19 +1656,6 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
-          "name": "newCommitNum",
-          "type": "uint8"
-        }
-      ],
-      "name": "setCommitNum",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
           "internalType": "contract IDeposit",
           "name": "_ideDeposit",
           "type": "address"
@@ -1720,6 +1727,32 @@
         }
       ],
       "name": "setNoProofPunishAmount",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint8",
+          "name": "_newCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "setProofCommitEpoch",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint8",
+          "name": "_newCommitEpoch",
+          "type": "uint8"
+        }
+      ],
+      "name": "setProofHashCommitEpoch",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1936,4 +1969,4 @@
       "stateMutability": "nonpayable",
       "type": "function"
     }
-  ]
+]
