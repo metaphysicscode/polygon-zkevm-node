@@ -21,6 +21,7 @@ import (
 const (
 	failureIntervalInSeconds = 5
 	// maxHistorySize           = 10
+	regexpPattern = "tx fee \\([0-9]+(.[0-9]{2}) ether\\) exceeds the configured cap \\([0-9]+(.[0-9]{2}) ether\\)"
 )
 
 var (
@@ -452,7 +453,6 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 					//	// 		continue
 					//	// 	}
 					//}
-
 					continue
 				}
 				mTxLog.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
@@ -620,6 +620,28 @@ func (c *Client) ReviewMonitoredTxNonce(ctx context.Context, mTx *monitoredTx) e
 		mTx.nonce = nonce
 	}
 
+	return nil
+}
+
+func (c *Client) ReviewMonitoredTxGas(ctx context.Context, mTx *monitoredTx) error {
+	gas, err := c.etherman.EstimateGas(ctx, mTx.from, mTx.to, mTx.value, mTx.data)
+	if err != nil {
+		latestBlockNumber, errBlockNumber := c.etherman.GetLatestBlockNumber(ctx)
+		if errBlockNumber != nil {
+			return fmt.Errorf("ReviewMonitoredTxGas failed to estimate gas. err: %v", errBlockNumber)
+		}
+		err := fmt.Errorf("ReviewMonitoredTxGas failed to estimate gas: %v, data: %v, latestBlockNumber: %d", err, common.Bytes2Hex(mTx.data), latestBlockNumber)
+		log.Error(err.Error())
+		if c.cfg.ForcedGas > 0 {
+			gas = c.cfg.ForcedGas
+		} else {
+			return err
+		}
+	} else {
+		offset := gasOffsets[mTx.owner]
+		gas += offset
+		log.Debugf("ReviewMonitoredTxGas applying gasOffset: %d. Final Gas: %d, Owner: %s", offset, gas, mTx.owner)
+	}
 	return nil
 }
 
