@@ -116,6 +116,11 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	return ctx.Err()
 }
 
+func (a *Aggregator) Stop() {
+	a.exit()
+	a.GenerateProof.Stop()
+}
+
 func buildMonitoredTxID(batchNumber, batchNumberFinal uint64) string {
 	return fmt.Sprintf(monitoredIDFormat, batchNumber, batchNumberFinal)
 }

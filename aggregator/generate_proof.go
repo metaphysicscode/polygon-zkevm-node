@@ -69,12 +69,12 @@ func newGenerateProof(cfg Config, stateInterface stateInterface, etherman etherm
 	}
 }
 
-func (g *GenerateProof) start(ctx context.Context) error {
+func (g *GenerateProof) start(ctx context.Context) {
 	if g.cfg.StartBatchNum > 0 {
 		sequence, err := g.State.GetSequence(ctx, g.cfg.StartBatchNum, nil)
 		if err != nil {
 			log.Debugf("failed to get sequence err: %s. batchNum: %d", err, g.cfg.StartBatchNum)
-			return err
+			return
 		}
 
 		g.stateSequence.FromBatchNumber = sequence.FromBatchNumber
@@ -112,9 +112,6 @@ func (g *GenerateProof) start(ctx context.Context) error {
 	}()
 
 	go g.checkGenerateFinalProof()
-
-	<-ctx.Done()
-	return ctx.Err()
 }
 
 func (g *GenerateProof) Channel(stream pb.AggregatorService_ChannelServer) error {
@@ -210,13 +207,13 @@ func getFunctionName() string {
 	return runtime.FuncForPC(pc).Name()
 }
 
-func (g *GenerateProof) checkGenerateFinalProof() error {
+func (g *GenerateProof) checkGenerateFinalProof() {
 	log := log.WithFields("function", getFunctionName())
 	for {
 		select {
 		case <-g.ctx.Done():
 			// server disconnected
-			return g.ctx.Err()
+			return
 
 		default:
 			lastVerifiedBatch, err := g.State.GetLastVerifiedBatch(g.ctx, nil)
@@ -252,8 +249,8 @@ func (g *GenerateProof) checkGenerateFinalProof() error {
 					_, errFinalProof := g.State.GetFinalProofByMonitoredId(g.ctx, monitoredTxID, nil)
 					if errors.Is(errFinalProof, state.ErrNotFound) {
 						if err := g.State.DeleteGeneratedProofs(g.ctx, sequence.FromBatchNumber, sequence.ToBatchNumber, nil); err != nil {
-							log.Errorf("Failed to delete proof in progress, err: %v", err)
-							break
+							log.Warnf("Failed to delete proof in progress, err: %v", err)
+							continue
 						}
 						g.skippedsMutex.Lock()
 						g.skippeds = append(g.skippeds, sequence)
@@ -357,7 +354,11 @@ func (g *GenerateProof) tryGetToVerifyProof(ctx context.Context, prover proverIn
 	len := len(g.skippeds)
 	if len > 0 {
 		skippedSequence = g.skippeds[0]
-		g.skippeds = g.skippeds[1:]
+		if len > 1 {
+			g.skippeds = g.skippeds[1:]
+		} else {
+			g.skippeds = make(SequenceList, 0)
+		}
 	}
 	g.skippedsMutex.Unlock()
 
@@ -386,10 +387,11 @@ func (g *GenerateProof) tryGetToVerifyProof(ctx context.Context, prover proverIn
 
 	sequence, errSequence := g.State.GetSequence(g.ctx, batchNum, nil)
 	if errors.Is(errSequence, state.ErrStateNotSynchronized) {
-		log.Debugf("%s", state.ErrStateNotSynchronized)
+		log.Warnf("%s", state.ErrStateNotSynchronized)
 		g.buildFinalProofBatchNumMutex.Unlock()
 		return false, nil
 	}
+
 	if errSequence != nil {
 		log.Warnf("failed to get sequence. err: %v", errSequence)
 		g.buildFinalProofBatchNumMutex.Unlock()
@@ -538,9 +540,8 @@ func (g *GenerateProof) tryBuildFinalProof(ctx context.Context, prover proverInt
 			return false, err
 		}
 
-		buildFinalProof := false
-		if err == state.ErrNotFound {
-			buildFinalProof = true
+		if err == nil {
+			return true, nil
 		}
 
 		var lastVerifiedBatchNum uint64
@@ -564,10 +565,6 @@ func (g *GenerateProof) tryBuildFinalProof(ctx context.Context, prover proverInt
 		log = log.WithFields(
 			"batches", fmt.Sprintf("%d-%d", proof.BatchNumber, proof.BatchNumberFinal),
 		)
-
-		if !buildFinalProof {
-			return true, nil
-		}
 
 	}
 
