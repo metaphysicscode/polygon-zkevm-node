@@ -95,7 +95,7 @@ func TestProofSender_SendProofHash(t *testing.T) {
 	mockState.On("GetBatchByNumber", mock.Anything, batchNumFinal, nil).Return(&finalBatch, nil)
 	mockState.On("GetProverProofByHash", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&proverProof, nil)
 	mockEtherMan.On("BuildProofHashTxData", mock.Anything, mock.Anything, mock.Anything).Return(nil, []byte("data"), nil)
-	mockEtherMan.On("GetSequencedBatch", mock.Anything).Return(uint64(1), nil)
+	mockEtherMan.On("GetSequencedBatch", mock.Anything).Return(uint64(1), false, nil)
 	mockEthTxManager.On("Add", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockEthTxManager.On("ProcessPendingMonitoredTxs", mock.Anything, ethTxManagerOwner, mock.Anything, nil).Run(func(args mock.Arguments) {
 		args[2].(ethtxmanager.ResultHandler)(ethTxManResult, nil) // this calls a.handleMonitoredTxResult
@@ -162,7 +162,7 @@ func TestProofSender_SendProof(t *testing.T) {
 	mockState.On("CleanupGeneratedProofs", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockState.On("GetProverProofByHash", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&proverProof, nil)
 	mockEtherMan.On("BuildUnTrustedVerifyBatchesTxData", mock.Anything, mock.Anything, mock.Anything).Return(nil, []byte("data"), nil)
-	mockEtherMan.On("GetSequencedBatch", mock.Anything).Return(uint64(1), nil)
+	mockEtherMan.On("GetSequencedBatch", mock.Anything).Return(uint64(1), false, nil)
 	mockEtherMan.On("GetLatestVerifiedBatchNum").Return(uint64(2), nil)
 	mockEthTxManager.On("Add", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockEthTxManager.On("ProcessPendingMonitoredTxs", mock.Anything, ethTxManagerOwner, mock.Anything, nil).Run(func(args mock.Arguments) {

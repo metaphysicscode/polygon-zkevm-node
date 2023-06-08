@@ -1175,7 +1175,6 @@ func (etherMan *Client) GetSequencedBatch(finalBatchNum uint64) (uint64, bool, e
 	if err != nil {
 		return 0, false, err
 	}
-
 	return sequencedBatch.BlockNumber.Uint64(), sequencedBatch.ProofSubmitted, err
 }
 

@@ -24,6 +24,7 @@ import (
 type ProofSenderServiceServer interface {
 	start(ctx context.Context) error
 	stop()
+	pushProofHash(msg proofHash) error
 }
 
 type ProofSender struct {
@@ -71,6 +72,11 @@ func newProofSender(
 
 func (sender *ProofSender) stop() {
 	sender.exit()
+}
+
+func (sender *ProofSender) pushProofHash(msg proofHash) error {
+	sender.proofHashCh <- msg
+	return nil
 }
 
 func (sender *ProofSender) start(ctx context.Context) error {
@@ -201,7 +207,7 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 	}
 
 	proof := currentMsg.recursiveProof
-	sequenceBlockNum, err := sender.etherMan.GetSequencedBatch(proof.BatchNumberFinal)
+	sequenceBlockNum, _, err := sender.etherMan.GetSequencedBatch(proof.BatchNumberFinal)
 	if err != nil {
 		log.Errorf("failed to get block number for first proof hash, err:v", err)
 		return err
@@ -320,7 +326,7 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 }
 
 func (sender *ProofSender) SendProof(proofHash *proofHash) (*proofHash, error) {
-	proofHashBlockNum, err := sender.etherMan.GetSequencedBatch(proofHash.batchNumberFinal)
+	proofHashBlockNum, proofSubmitted, err := sender.etherMan.GetSequencedBatch(proofHash.batchNumberFinal)
 	if err != nil {
 		log.Errorf("failed to get block number for first proof hash")
 		return proofHash, err
@@ -334,7 +340,8 @@ func (sender *ProofSender) SendProof(proofHash *proofHash) (*proofHash, error) {
 
 	commitEpoch := uint64(sender.proofHashCommitEpoch + sender.proofCommitEpoch)
 	if (proofHashBlockNum + commitEpoch) < blockNumber {
-		if (blockNumber-proofHashBlockNum)%commitEpoch < uint64(sender.proofHashCommitEpoch) {
+		// 未有其他人提交proof， 超过时间窗口
+		if !proofSubmitted && (blockNumber-proofHashBlockNum)%commitEpoch < uint64(sender.proofHashCommitEpoch) {
 			failMsg := sendFailProofMsg{
 				proofHash.batchNumber,
 				proofHash.batchNumberFinal,
@@ -429,7 +436,7 @@ func (sender *ProofSender) handleMonitoredTxResult(result ethtxmanager.Monitored
 				return
 			}
 
-			proofHashBlockNum, err := sender.etherMan.GetSequencedBatch(proofBatchNumberFinal)
+			proofHashBlockNum, _, err := sender.etherMan.GetSequencedBatch(proofBatchNumberFinal)
 			if err != nil {
 				resLog.Errorf("failed to get block number for first proof hash")
 				return
@@ -571,7 +578,7 @@ func (sender *ProofSender) monitorSendProof(batchNumber, batchNumberFinal uint64
 				continue
 			}
 
-			proofHashBlockNum, err := sender.etherMan.GetSequencedBatch(batchNumberFinal)
+			proofHashBlockNum, _, err := sender.etherMan.GetSequencedBatch(batchNumberFinal)
 			if err != nil {
 				resLog.Errorf("failed to get block number for first proof hash")
 				continue
