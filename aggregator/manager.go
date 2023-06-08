@@ -71,10 +71,7 @@ func New(
 	finalProofCh := make(chan finalProofMsg, 10240)
 	sendFailProofMsgCh := make(chan sendFailProofMsg, 10240)
 	generateProof := newGenerateProof(cfg, stateInterface, etherman)
-	proofSender, err := newProofSender(cfg, stateInterface, ethTxManager, etherman, finalProofCh, sendFailProofMsgCh)
-	if err != nil {
-		log.Fatal(err)
-	}
+	proofSender := newProofSender(cfg, stateInterface, ethTxManager, etherman, finalProofCh, sendFailProofMsgCh)
 
 	a := Aggregator{
 		cfg: cfg,

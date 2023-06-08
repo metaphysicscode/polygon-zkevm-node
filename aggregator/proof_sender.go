@@ -21,7 +21,7 @@ import (
 )
 
 type ProofSenderServiceServer interface {
-	Start(ctx context.Context)
+	Start(ctx context.Context) error
 	CanVerifyProof() bool
 	StartProofVerification()
 	EndProofVerification()
@@ -68,15 +68,7 @@ func newProofSender(
 	etherMan etherman,
 	finalProofCh <-chan finalProofMsg,
 	sendFailProofMsgCh chan<- sendFailProofMsg,
-) (*ProofSender, error) {
-	proofHashCommitEpoch, err := etherMan.GetProofHashCommitEpoch()
-	if err != nil {
-		log.Fatal(err)
-	}
-	proofCommitEpoch, err := etherMan.GetProofCommitEpoch()
-	if err != nil {
-		log.Fatal(err)
-	}
+) *ProofSender {
 	return &ProofSender{
 		cfg:                         cfg,
 		state:                       State,
@@ -87,16 +79,14 @@ func newProofSender(
 		TimeSendFinalProofMutex:     &sync.RWMutex{},
 		TimeSendFinalProofHashMutex: &sync.RWMutex{},
 		sendFailProofMsgCh:          sendFailProofMsgCh,
-		proofHashCommitEpoch:        proofHashCommitEpoch,
-		proofCommitEpoch:            proofCommitEpoch,
-	}, nil
+	}
 }
 
 func (sender *ProofSender) Stop() {
 	sender.exit()
 }
 
-func (sender *ProofSender) Start(ctx context.Context) {
+func (sender *ProofSender) Start(ctx context.Context) error {
 	log.Infof("Proof sender start. proofHashEpoch %d, proofEpoch: %d", sender.proofHashCommitEpoch, sender.proofCommitEpoch)
 	var cancel context.CancelFunc
 	if ctx == nil {
@@ -105,6 +95,17 @@ func (sender *ProofSender) Start(ctx context.Context) {
 	ctx, cancel = context.WithCancel(ctx)
 	sender.ctx = ctx
 	sender.exit = cancel
+
+	proofHashCommitEpoch, err := sender.etherMan.GetProofHashCommitEpoch()
+	if err != nil {
+		log.Fatal(err)
+	}
+	proofCommitEpoch, err := sender.etherMan.GetProofCommitEpoch()
+	if err != nil {
+		log.Fatal(err)
+	}
+	sender.proofHashCommitEpoch = proofHashCommitEpoch
+	sender.proofCommitEpoch = proofCommitEpoch
 	go func() {
 		proofHashSendTask := proofHashSendTask{}
 		var proofHash *proofHash = nil
@@ -141,6 +142,7 @@ func (sender *ProofSender) Start(ctx context.Context) {
 			}
 		}
 	}()
+	return nil
 }
 
 func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
