@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/jackc/pgx/v4"
 	solsha3 "github.com/miguelmota/go-solidity-sha3"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,38 +22,24 @@ import (
 )
 
 type ProofSenderServiceServer interface {
-	Start(ctx context.Context) error
-	CanVerifyProof() bool
-	StartProofVerification()
-	EndProofVerification()
-	ResetVerifyProofTime()
-	CanVerifyProofHash() bool
-	StartProofHash()
-	EndProofHash()
-	ResetVerifyProofHashTime()
-	Stop()
+	start(ctx context.Context) error
+	stop()
 }
 
 type ProofSender struct {
-	ctx          context.Context
-	exit         context.CancelFunc
-	cfg          Config
-	state        stateInterface
-	ethTxManager ethTxManager
-	etherMan     etherman
-
-	TimeSendFinalProof          time.Time
-	TimeSendFinalProofHash      time.Time
-	TimeSendFinalProofMutex     *sync.RWMutex
-	TimeSendFinalProofHashMutex *sync.RWMutex
-	verifyingProof              bool
-	verifyingProofHash          bool
-
-	finalProofCh         <-chan finalProofMsg
-	proofHashCh          chan proofHash
-	sendFailProofMsgCh   chan<- sendFailProofMsg
-	proofHashCommitEpoch uint8
-	proofCommitEpoch     uint8
+	ctx                     context.Context
+	exit                    context.CancelFunc
+	cfg                     Config
+	state                   stateInterface
+	ethTxManager            ethTxManager
+	etherMan                etherman
+	finalProofMsgCacheMutex *sync.RWMutex
+	finalProofMsgCache      finalProofMsgList
+	finalProofCh            <-chan finalProofMsg
+	proofHashCh             chan proofHash
+	sendFailProofMsgCh      chan<- sendFailProofMsg
+	proofHashCommitEpoch    uint8
+	proofCommitEpoch        uint8
 }
 
 type proofHashSendTask struct {
@@ -70,23 +57,23 @@ func newProofSender(
 	sendFailProofMsgCh chan<- sendFailProofMsg,
 ) *ProofSender {
 	return &ProofSender{
-		cfg:                         cfg,
-		state:                       State,
-		ethTxManager:                EthTxManager,
-		etherMan:                    etherMan,
-		finalProofCh:                finalProofCh,
-		proofHashCh:                 make(chan proofHash, 10240),
-		TimeSendFinalProofMutex:     &sync.RWMutex{},
-		TimeSendFinalProofHashMutex: &sync.RWMutex{},
-		sendFailProofMsgCh:          sendFailProofMsgCh,
+		cfg:                     cfg,
+		state:                   State,
+		ethTxManager:            EthTxManager,
+		etherMan:                etherMan,
+		finalProofCh:            finalProofCh,
+		proofHashCh:             make(chan proofHash, 10240),
+		finalProofMsgCacheMutex: &sync.RWMutex{},
+		finalProofMsgCache:      make(finalProofMsgList, 0),
+		sendFailProofMsgCh:      sendFailProofMsgCh,
 	}
 }
 
-func (sender *ProofSender) Stop() {
+func (sender *ProofSender) stop() {
 	sender.exit()
 }
 
-func (sender *ProofSender) Start(ctx context.Context) error {
+func (sender *ProofSender) start(ctx context.Context) error {
 	log.Infof("Proof sender start. proofHashEpoch %d, proofEpoch: %d", sender.proofHashCommitEpoch, sender.proofCommitEpoch)
 	var cancel context.CancelFunc
 	if ctx == nil {
@@ -95,20 +82,9 @@ func (sender *ProofSender) Start(ctx context.Context) error {
 	ctx, cancel = context.WithCancel(ctx)
 	sender.ctx = ctx
 	sender.exit = cancel
-
-	proofHashCommitEpoch, err := sender.etherMan.GetProofHashCommitEpoch()
-	if err != nil {
-		log.Fatal(err)
-	}
-	proofCommitEpoch, err := sender.etherMan.GetProofCommitEpoch()
-	if err != nil {
-		log.Fatal(err)
-	}
-	sender.proofHashCommitEpoch = proofHashCommitEpoch
-	sender.proofCommitEpoch = proofCommitEpoch
 	go func() {
 		proofHashSendTask := proofHashSendTask{}
-		var proofHash *proofHash = nil
+		var proofSendTask *proofHash = nil
 		timeSleep := 1 * time.Second
 		for {
 			select {
@@ -118,24 +94,26 @@ func (sender *ProofSender) Start(ctx context.Context) error {
 			default:
 			}
 			time.Sleep(timeSleep)
-			if proofHash == nil {
+			if err := sender.updateEpochInfo(); err != nil {
+				log.Warn(err)
+				continue
+			}
+			if proofSendTask == nil {
 				select {
 				case proofHashT := <-sender.proofHashCh:
-					proofHash = &proofHashT
+					proofSendTask = &proofHashT
+				case msg := <-sender.finalProofCh:
+					sender.insertFinalProofMsgCache(msg)
 				default:
 				}
 			}
 			// 优先proof
-			if proofHash == nil && proofHashSendTask.msg == nil {
-				select {
-				case msg := <-sender.finalProofCh:
-					proofHashSendTask.msg = &msg
-				default:
-				}
+			if proofSendTask == nil && proofHashSendTask.msg == nil {
+				proofHashSendTask.msg = sender.upFinalProofMsgCache()
 			}
 
-			if proofHash != nil {
-				proofHash, _ = sender.SendProof(proofHash)
+			if proofSendTask != nil {
+				proofSendTask, _ = sender.SendProof(proofSendTask)
 			}
 			if proofHashSendTask.msg != nil {
 				_ = sender.SendProofHash(&proofHashSendTask)
@@ -145,6 +123,45 @@ func (sender *ProofSender) Start(ctx context.Context) error {
 	return nil
 }
 
+func (sender *ProofSender) insertFinalProofMsgCache(msg finalProofMsg) {
+	sender.finalProofMsgCacheMutex.Lock()
+	sender.finalProofMsgCache = append(sender.finalProofMsgCache, msg)
+	sort.Sort(sender.finalProofMsgCache)
+	sender.finalProofMsgCacheMutex.Unlock()
+}
+
+func (sender *ProofSender) upFinalProofMsgCache() *finalProofMsg {
+	sender.finalProofMsgCacheMutex.Lock()
+	length := len(sender.finalProofMsgCache)
+	if length > 0 {
+		msg := sender.finalProofMsgCache[0]
+		if length > 1 {
+			sender.finalProofMsgCache = sender.finalProofMsgCache[1:]
+		} else {
+			sender.finalProofMsgCache = make([]finalProofMsg, 0)
+		}
+		sender.finalProofMsgCacheMutex.Unlock()
+		return &msg
+	} else {
+		sender.finalProofMsgCacheMutex.Unlock()
+		return nil
+	}
+
+}
+
+func (sender *ProofSender) updateEpochInfo() error {
+	proofHashCommitEpoch, err := sender.etherMan.GetProofHashCommitEpoch()
+	if err != nil {
+		return err
+	}
+	proofCommitEpoch, err := sender.etherMan.GetProofCommitEpoch()
+	if err != nil {
+		return err
+	}
+	sender.proofHashCommitEpoch = proofHashCommitEpoch
+	sender.proofCommitEpoch = proofCommitEpoch
+	return nil
+}
 func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 	currentMsg := task.msg
 	lastVerifiedEthBatchNum, err := sender.etherMan.GetLatestVerifiedBatchNum()
@@ -174,8 +191,12 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 	}
 
 	if (task.commitProofHashBatchNum + 1) < currentMsg.recursiveProof.BatchNumber {
+		//future
 		errMsg := fmt.Sprintf("Receive future msg, bach expc:%v, get:%v", task.commitProofHashBatchNum+1, currentMsg.recursiveProof.BatchNumber)
 		log.Warnf(errMsg)
+		msg := *task.msg
+		task.msg = nil
+		sender.insertFinalProofMsgCache(msg)
 		return errors.New(errMsg)
 	}
 
@@ -187,12 +208,12 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 	}
 
 	// 超过批次, 默认 curBlockNumber > sequenceBlockNum
-	if (curBlockNumber-sequenceBlockNum)%uint64(sender.proofCommitEpoch+sender.proofHashCommitEpoch) > uint64(sender.proofHashCommitEpoch) {
-		failMsg := sendFailProofMsg{
-			proof.BatchNumber,
-			proof.BatchNumberFinal,
-		}
-		sender.sendFailProofMsgCh <- failMsg
+	if sequenceBlockNum > 0 && (curBlockNumber-sequenceBlockNum)%uint64(sender.proofCommitEpoch+sender.proofHashCommitEpoch) > uint64(sender.proofHashCommitEpoch) {
+		//failMsg := sendFailProofMsg{
+		//	proof.BatchNumber,
+		//	proof.BatchNumberFinal,
+		//}
+		//sender.sendFailProofMsgCh <- failMsg
 		errMsg := fmt.Sprintf("Send proof hash expired, current blockNumber: %v, sequenceBatch %v, need to resend", curBlockNumber, sequenceBlockNum)
 		log.Warn(errMsg)
 		task.msg = nil
@@ -209,12 +230,9 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 	hash := crypto.Keccak256Hash(pack)
 	monitoredTxID := fmt.Sprintf(monitoredHashIDFormat, proof.BatchNumber, proof.BatchNumberFinal)
 
-	sender.StartProofHash()
-
 	finalBatch, err := sender.state.GetBatchByNumber(sender.ctx, proof.BatchNumberFinal, nil)
 	if err != nil {
 		log.Errorf("Failed to retrieve batch with number [%d]: %v", proof.BatchNumberFinal, err)
-		sender.EndProofHash()
 		return err
 	}
 
@@ -231,7 +249,6 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 		}, nil); err != nil {
 			logObj := log.WithFields("tx", monitoredTxID)
 			logObj.Errorf("Error to add prover proof to db: %v", err)
-			sender.EndProofHash()
 			return err
 		}
 	}
@@ -240,15 +257,12 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 	to, data, err := sender.etherMan.BuildProofHashTxData(proof.BatchNumber-1, proof.BatchNumberFinal, hash)
 	if err != nil {
 		log.Errorf("Error estimating proof hash to add to eth tx manager: %v", err)
-		sender.EndProofHash()
-		// a.handleFailureToAddVerifyBatchToBeMonitored(ctx, proof)
 		return err
 	}
 	err = sender.ethTxManager.Add(sender.ctx, ethTxManagerOwner, monitoredTxID, common.HexToAddress(sender.cfg.SenderAddress), to, nil, data, nil)
 	if err != nil {
 		logObj := log.WithFields("tx", monitoredTxID)
 		logObj.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
-		sender.EndProofHash()
 		return err
 	}
 
@@ -299,8 +313,6 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 		return errors.New(errMsg)
 	}
 
-	sender.ResetVerifyProofHashTime()
-	sender.EndProofHash()
 	task.commitProofHashBatchNum = currentMsg.recursiveProof.BatchNumberFinal
 	task.msg = nil
 	go sender.monitorSendProof(proof.BatchNumber, proof.BatchNumberFinal, monitoredTxID)
@@ -342,8 +354,6 @@ func (sender *ProofSender) SendProof(proofHash *proofHash) (*proofHash, error) {
 	logObj := log.WithFields("batches", fmt.Sprintf("%d-%d", proverProof.InitNumBatch, proverProof.FinalNewBatch))
 	logObj.Info("Verifying final proof with ethereum smart contract")
 
-	sender.StartProofVerification()
-
 	inputs := ethmanTypes.FinalProofInputs{
 		FinalProof:       &pb.FinalProof{Proof: proverProof.Proof},
 		NewLocalExitRoot: proverProof.LocalExitRoot.Bytes(),
@@ -356,7 +366,6 @@ func (sender *ProofSender) SendProof(proofHash *proofHash) (*proofHash, error) {
 	to, data, err := sender.etherMan.BuildUnTrustedVerifyBatchesTxData(proverProof.InitNumBatch-1, proverProof.FinalNewBatch, &inputs)
 	if err != nil {
 		logObj.Errorf("Error estimating batch verification to add to eth tx manager: %v", err)
-		sender.EndProofVerification()
 		return proofHash, err
 	}
 
@@ -366,18 +375,12 @@ func (sender *ProofSender) SendProof(proofHash *proofHash) (*proofHash, error) {
 	if err != nil {
 		logObj := log.WithFields("tx", monitoredTxID)
 		logObj.Errorf("Error to add batch verification tx to eth tx manager: %v", err)
-		sender.EndProofVerification()
-		sender.ResetVerifyProofTime()
-
 		return proofHash, err
 	}
 	// process monitored batch verifications before starting a next cycle
 	sender.ethTxManager.ProcessPendingMonitoredTxs(sender.ctx, ethTxManagerOwner, func(result ethtxmanager.MonitoredTxResult, dbTx pgx.Tx) {
 		sender.handleMonitoredTxResult(result)
 	}, nil)
-
-	sender.ResetVerifyProofTime()
-	sender.EndProofVerification()
 
 	return nil, nil
 
@@ -593,52 +596,4 @@ func (sender *ProofSender) monitorSendProof(batchNumber, batchNumberFinal uint64
 			return
 		}
 	}
-}
-
-func (sender *ProofSender) CanVerifyProof() bool {
-	sender.TimeSendFinalProofMutex.RLock()
-	defer sender.TimeSendFinalProofMutex.RUnlock()
-	return sender.TimeSendFinalProof.Before(time.Now()) && !sender.verifyingProof
-}
-
-func (sender *ProofSender) StartProofVerification() {
-	sender.TimeSendFinalProofMutex.Lock()
-	defer sender.TimeSendFinalProofMutex.Unlock()
-	sender.verifyingProof = true
-}
-
-func (sender *ProofSender) EndProofVerification() {
-	sender.TimeSendFinalProofMutex.Lock()
-	defer sender.TimeSendFinalProofMutex.Unlock()
-	sender.verifyingProof = false
-}
-
-func (sender *ProofSender) ResetVerifyProofTime() {
-	sender.TimeSendFinalProofMutex.Lock()
-	defer sender.TimeSendFinalProofMutex.Unlock()
-	sender.TimeSendFinalProof = time.Now().Add(sender.cfg.VerifyProofInterval.Duration)
-}
-
-func (sender *ProofSender) CanVerifyProofHash() bool {
-	sender.TimeSendFinalProofHashMutex.RLock()
-	defer sender.TimeSendFinalProofHashMutex.RUnlock()
-	return sender.TimeSendFinalProofHash.Before(time.Now()) && !sender.verifyingProofHash
-}
-
-func (sender *ProofSender) StartProofHash() {
-	sender.TimeSendFinalProofHashMutex.Lock()
-	defer sender.TimeSendFinalProofHashMutex.Unlock()
-	sender.verifyingProofHash = true
-}
-
-func (sender *ProofSender) EndProofHash() {
-	sender.TimeSendFinalProofHashMutex.Lock()
-	defer sender.TimeSendFinalProofHashMutex.Unlock()
-	sender.verifyingProofHash = false
-}
-
-func (sender *ProofSender) ResetVerifyProofHashTime() {
-	sender.TimeSendFinalProofHashMutex.Lock()
-	defer sender.TimeSendFinalProofHashMutex.Unlock()
-	sender.TimeSendFinalProofHash = time.Now().Add(sender.cfg.VerifyProofInterval.Duration)
 }

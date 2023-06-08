@@ -116,7 +116,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	}
 
 	a.GenerateProof.start(ctx)
-	a.proofSender.Start(ctx)
+	a.proofSender.start(ctx)
 
 	<-ctx.Done()
 	return ctx.Err()

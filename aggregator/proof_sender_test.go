@@ -34,11 +34,8 @@ func TestProofSender_CancelSendProof(t *testing.T) {
 
 	finalProofCh := make(chan finalProofMsg, 10)
 	sendFailProofMsgCh := make(chan sendFailProofMsg, 10)
-	proofSender, err := newProofSender(cfg, mockState, mockEthTxManager, mockEtherMan, finalProofCh, sendFailProofMsgCh)
-	if err != nil {
-		panic(err)
-	}
-	proofSender.Start(ctx)
+	proofSender := newProofSender(cfg, mockState, mockEthTxManager, mockEtherMan, finalProofCh, sendFailProofMsgCh)
+	proofSender.start(ctx)
 	time.Sleep(time.Second)
 	cancelF()
 	time.Sleep(3 * time.Second)
@@ -107,11 +104,8 @@ func TestProofSender_SendProofHash(t *testing.T) {
 	ctx, cancelF := context.WithCancel(context.Background())
 	finalProofCh := make(chan finalProofMsg, 10)
 	sendFailProofMsgCh := make(chan sendFailProofMsg, 10)
-	proofSender, err := newProofSender(cfg, mockState, mockEthTxManager, mockEtherMan, finalProofCh, sendFailProofMsgCh)
+	proofSender := newProofSender(cfg, mockState, mockEthTxManager, mockEtherMan, finalProofCh, sendFailProofMsgCh)
 	proofSender.proofHashCommitEpoch = 1
-	if err != nil {
-		panic(err)
-	}
 	go func() {
 		finalProofCh <- finalProofMsg{
 			proverID:       proverID,
@@ -119,7 +113,7 @@ func TestProofSender_SendProofHash(t *testing.T) {
 			finalProof:     finalProof,
 		}
 	}()
-	proofSender.Start(ctx)
+	proofSender.start(ctx)
 	time.Sleep(20 * time.Second)
 	byteContents, err := os.ReadFile(logOut)
 	require.NoError(t, err, "Couldn't read log contents from temp file.")
@@ -178,11 +172,9 @@ func TestProofSender_SendProof(t *testing.T) {
 	ctx, cancelF := context.WithCancel(context.Background())
 	finalProofCh := make(chan finalProofMsg, 10)
 	sendFailProofMsgCh := make(chan sendFailProofMsg, 10)
-	proofSender, err := newProofSender(cfg, mockState, mockEthTxManager, mockEtherMan, finalProofCh, sendFailProofMsgCh)
+	proofSender := newProofSender(cfg, mockState, mockEthTxManager, mockEtherMan, finalProofCh, sendFailProofMsgCh)
 	proofSender.proofHashCommitEpoch = 1
-	if err != nil {
-		panic(err)
-	}
+
 	go func() {
 		proofSender.proofHashCh <- proofHash{
 			hash:                   common.BytesToHash([]byte("NewStateRoot")).String(),
@@ -191,7 +183,7 @@ func TestProofSender_SendProof(t *testing.T) {
 			monitoredProofHashTxID: "monitoredProofHashTxID",
 		}
 	}()
-	proofSender.Start(ctx)
+	proofSender.start(ctx)
 	time.Sleep(10 * time.Second)
 	byteContents, err := os.ReadFile(logOut)
 	require.NoError(t, err, "Couldn't read log contents from temp file.")
