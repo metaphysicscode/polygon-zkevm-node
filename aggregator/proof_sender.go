@@ -21,7 +21,7 @@ import (
 )
 
 type ProofSenderServiceServer interface {
-	Start()
+	Start(ctx context.Context)
 	CanVerifyProof() bool
 	StartProofVerification()
 	EndProofVerification()
@@ -30,10 +30,12 @@ type ProofSenderServiceServer interface {
 	StartProofHash()
 	EndProofHash()
 	ResetVerifyProofHashTime()
+	Stop()
 }
 
 type ProofSender struct {
 	ctx          context.Context
+	exit         context.CancelFunc
 	cfg          Config
 	state        stateInterface
 	ethTxManager ethTxManager
@@ -59,15 +61,14 @@ type proofHashSendTask struct {
 	commitProofHashBatchNum uint64
 }
 
-func NewProofSender(
-	ctx context.Context,
+func newProofSender(
 	cfg Config,
 	State stateInterface,
 	EthTxManager ethTxManager,
 	etherMan etherman,
 	finalProofCh <-chan finalProofMsg,
 	sendFailProofMsgCh chan<- sendFailProofMsg,
-) (ProofSender, error) {
+) (*ProofSender, error) {
 	proofHashCommitEpoch, err := etherMan.GetProofHashCommitEpoch()
 	if err != nil {
 		log.Fatal(err)
@@ -76,8 +77,7 @@ func NewProofSender(
 	if err != nil {
 		log.Fatal(err)
 	}
-	return ProofSender{
-		ctx:                         ctx,
+	return &ProofSender{
 		cfg:                         cfg,
 		state:                       State,
 		ethTxManager:                EthTxManager,
@@ -92,42 +92,55 @@ func NewProofSender(
 	}, nil
 }
 
-func (sender *ProofSender) Start() {
-	log.Infof("Proof sender start. proofHashEpoch %d, proofEpoch: %d", sender.proofHashCommitEpoch, sender.proofCommitEpoch)
-	proofHashSendTask := proofHashSendTask{}
-	var proofHash *proofHash = nil
-	timeSleep := 1 * time.Second
-	for {
-		select {
-		case <-sender.ctx.Done():
-			log.Errorf("Send job loop break, err: %v", sender.ctx.Err())
-			return
-		default:
-		}
-		time.Sleep(timeSleep)
-		if proofHash == nil {
-			select {
-			case proofHashT := <-sender.proofHashCh:
-				proofHash = &proofHashT
-			default:
-			}
-		}
-		// 优先proof
-		if proofHash == nil && proofHashSendTask.msg == nil {
-			select {
-			case msg := <-sender.finalProofCh:
-				proofHashSendTask.msg = &msg
-			default:
-			}
-		}
+func (sender *ProofSender) Stop() {
+	sender.exit()
+}
 
-		if proofHash != nil {
-			proofHash, _ = sender.SendProof(proofHash)
-		}
-		if proofHashSendTask.msg != nil {
-			_ = sender.SendProofHash(&proofHashSendTask)
-		}
+func (sender *ProofSender) Start(ctx context.Context) {
+	log.Infof("Proof sender start. proofHashEpoch %d, proofEpoch: %d", sender.proofHashCommitEpoch, sender.proofCommitEpoch)
+	var cancel context.CancelFunc
+	if ctx == nil {
+		ctx = context.Background()
 	}
+	ctx, cancel = context.WithCancel(ctx)
+	sender.ctx = ctx
+	sender.exit = cancel
+	go func() {
+		proofHashSendTask := proofHashSendTask{}
+		var proofHash *proofHash = nil
+		timeSleep := 1 * time.Second
+		for {
+			select {
+			case <-sender.ctx.Done():
+				log.Errorf("Send job loop break, err: %v", sender.ctx.Err())
+				return
+			default:
+			}
+			time.Sleep(timeSleep)
+			if proofHash == nil {
+				select {
+				case proofHashT := <-sender.proofHashCh:
+					proofHash = &proofHashT
+				default:
+				}
+			}
+			// 优先proof
+			if proofHash == nil && proofHashSendTask.msg == nil {
+				select {
+				case msg := <-sender.finalProofCh:
+					proofHashSendTask.msg = &msg
+				default:
+				}
+			}
+
+			if proofHash != nil {
+				proofHash, _ = sender.SendProof(proofHash)
+			}
+			if proofHashSendTask.msg != nil {
+				_ = sender.SendProofHash(&proofHashSendTask)
+			}
+		}
+	}()
 }
 
 func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {

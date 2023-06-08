@@ -38,6 +38,8 @@ type Aggregator struct {
 
 	*GenerateProof
 
+	proofSender ProofSenderServiceServer
+
 	ctx  context.Context
 	exit context.CancelFunc
 }
@@ -66,8 +68,13 @@ func New(
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	finalProofCh := make(chan finalProofMsg, 10240)
+	sendFailProofMsgCh := make(chan sendFailProofMsg, 10240)
 	generateProof := newGenerateProof(cfg, stateInterface, etherman)
+	proofSender, err := newProofSender(cfg, stateInterface, ethTxManager, etherman, finalProofCh, sendFailProofMsgCh)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	a := Aggregator{
 		cfg: cfg,
@@ -82,6 +89,7 @@ func New(
 		proofCommitEpoch:     proofCommitEpoch,
 
 		GenerateProof: generateProof,
+		proofSender:   proofSender,
 	}
 
 	return a, nil
@@ -111,6 +119,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	}
 
 	a.GenerateProof.start(ctx)
+	a.proofSender.Start(ctx)
 
 	<-ctx.Done()
 	return ctx.Err()
