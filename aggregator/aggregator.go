@@ -363,7 +363,7 @@ func (a *Aggregator) resendProofHash() {
 				continue
 			}
 
-			firstProofHashBlockNumber, err := a.Ethman.GetSequencedBatch(sequence.ToBatchNumber)
+			firstProofHashBlockNumber, proofSubmitted, err := a.Ethman.GetSequencedBatch(sequence.ToBatchNumber)
 			if err != nil {
 				log.Debugf("failed to query first proof hash block number. err: %v: %s", err)
 				continue
@@ -380,7 +380,7 @@ func (a *Aggregator) resendProofHash() {
 
 			log.Infof("proofHashTxBlockNumber : %v", firstProofHashBlockNumber)
 
-			if (firstProofHashBlockNumber + commitEpoch) > curBlockNumber {
+			if (firstProofHashBlockNumber+commitEpoch) > curBlockNumber || proofSubmitted {
 				if (firstProofHashBlockNumber + uint64(a.proofHashCommitEpoch)) < curBlockNumber {
 					a.monitoredProofHashTxLock.Lock()
 					if _, ok := a.monitoredProofHashTx[monitoredProofHashTxID]; !ok {
@@ -733,7 +733,7 @@ func (a *Aggregator) sendFinalProof() {
 			proverProof, err := a.State.GetProverProofByHash(a.ctx, proofHash.hash, proofHash.batchNumberFinal, nil)
 			if err != nil {
 				log.Errorf("Error to get prover proof: %v", err)
-				proofHashBlockNum, err := a.Ethman.GetSequencedBatch(proofHash.batchNumberFinal)
+				proofHashBlockNum, _, err := a.Ethman.GetSequencedBatch(proofHash.batchNumberFinal)
 				if err != nil {
 					log.Errorf("failed to get block number for first proof hash")
 					a.proofHashCH <- proofHash
@@ -872,7 +872,7 @@ func (a *Aggregator) monitorSendProof(batchNumber, batchNumberFinal uint64, moni
 				continue
 			}
 
-			proofHashBlockNum, err := a.Ethman.GetSequencedBatch(batchNumberFinal)
+			proofHashBlockNum, _, err := a.Ethman.GetSequencedBatch(batchNumberFinal)
 			if err != nil {
 				log.Errorf("failed to get block number for first proof hash")
 				continue
@@ -987,10 +987,10 @@ func (a *Aggregator) tryBuildFinalProof(ctx context.Context, prover proverInterf
 	// 	log.Debug("Time to verify proof not reached or proof verification in progress")
 	// 	return false, nil
 	// }
-	if !a.canVerifyProofHash() {
-		log.Debug("Time to verify proof hash not reached or proof verification in progress")
-		return false, nil
-	}
+	// if !a.canVerifyProofHash() {
+	// 	log.Debug("Time to verify proof hash not reached or proof verification in progress")
+	// 	return false, nil
+	// }
 	log.Debug("Send final proof hash time reached")
 
 	for !a.isSynced(ctx, nil) {
@@ -1914,7 +1914,7 @@ func (a *Aggregator) handleMonitoredTxResult(result ethtxmanager.MonitoredTxResu
 				return
 			}
 
-			proofHashBlockNum, err := a.Ethman.GetSequencedBatch(proofBatchNumberFinal)
+			proofHashBlockNum, _, err := a.Ethman.GetSequencedBatch(proofBatchNumberFinal)
 			if err != nil {
 				log.Errorf("failed to get block number for first proof hash")
 				return

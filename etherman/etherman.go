@@ -1170,12 +1170,13 @@ func (etherMan *Client) GetLatestVerifiedBatchNum() (uint64, error) {
 	return etherMan.PoE.LastVerifiedBatch(&bind.CallOpts{Pending: false})
 }
 
-func (etherMan *Client) GetSequencedBatch(finalBatchNum uint64) (uint64, error) {
+func (etherMan *Client) GetSequencedBatch(finalBatchNum uint64) (uint64, bool, error) {
 	sequencedBatch, err := etherMan.PoE.SequencedBatches(&bind.CallOpts{Pending: false}, finalBatchNum)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return sequencedBatch.BlockNumber.Uint64(), err
+
+	return sequencedBatch.BlockNumber.Uint64(), sequencedBatch.ProofSubmitted, err
 }
 
 func (etherMan *Client) GetProofHashCommitEpoch() (uint8, error) {

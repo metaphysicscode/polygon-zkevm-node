@@ -45,7 +45,7 @@ type etherman interface {
 	BuildUnTrustedVerifyBatchesTxData(lastVerifiedBatch, newVerifiedBatch uint64, inputs *ethmanTypes.FinalProofInputs) (to *common.Address, data []byte, err error)
 	GetLatestBlockNumber(ctx context.Context) (uint64, error)
 	JudgeAggregatorDeposit(account common.Address) (bool, error)
-	GetSequencedBatch(finalBatchNum uint64) (uint64, error)
+	GetSequencedBatch(finalBatchNum uint64) (uint64, bool, error)
 	GetProofHashCommitEpoch() (uint8, error)
 	GetProofCommitEpoch() (uint8, error)
 }
