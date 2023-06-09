@@ -4,6 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/0xPolygonHermez/zkevm-node/aggregator/pb"
 	"github.com/0xPolygonHermez/zkevm-node/encoding"
 	ethmanTypes "github.com/0xPolygonHermez/zkevm-node/etherman/types"
@@ -14,11 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/jackc/pgx/v4"
 	solsha3 "github.com/miguelmota/go-solidity-sha3"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 type ProofSenderServiceServer interface {
@@ -113,7 +114,7 @@ func (sender *ProofSender) start(ctx context.Context) error {
 				default:
 				}
 			}
-			// 优先proof
+			// Proof of Priority
 			if proofSendTask == nil && proofHashSendTask.msg == nil {
 				proofHashSendTask.msg = sender.upFinalProofMsgCache()
 			}
@@ -213,7 +214,7 @@ func (sender *ProofSender) SendProofHash(task *proofHashSendTask) error {
 		return err
 	}
 
-	// 超过批次, 默认 curBlockNumber > sequenceBlockNum
+	// over batches, default curBlockNumber > sequenceBlockNum
 	if sequenceBlockNum > 0 && (curBlockNumber-sequenceBlockNum)%uint64(sender.proofCommitEpoch+sender.proofHashCommitEpoch) > uint64(sender.proofHashCommitEpoch) {
 		//failMsg := sendFailProofMsg{
 		//	proof.BatchNumber,
@@ -340,7 +341,7 @@ func (sender *ProofSender) SendProof(proofHash *proofHash) (*proofHash, error) {
 
 	commitEpoch := uint64(sender.proofHashCommitEpoch + sender.proofCommitEpoch)
 	if (proofHashBlockNum + commitEpoch) < blockNumber {
-		// 未有其他人提交proof， 超过时间窗口
+		// No one else has submitted the proof, the time window is exceeded
 		if !proofSubmitted && (blockNumber-proofHashBlockNum)%commitEpoch < uint64(sender.proofHashCommitEpoch) {
 			failMsg := sendFailProofMsg{
 				proofHash.batchNumber,
