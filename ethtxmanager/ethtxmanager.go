@@ -707,3 +707,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, owner string, r
 		}
 	}
 }
+
+func (c *Client) GetLatestMinedTxId(ctx context.Context, owner string, status MonitoredTxStatus, dbTx pgx.Tx) (string, error) {
+	return c.storage.GetLatestMinedTxId(ctx, &owner, status, dbTx)
+}

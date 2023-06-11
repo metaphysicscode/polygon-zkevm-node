@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	ethman "github.com/0xPolygonHermez/zkevm-node/etherman"
@@ -106,12 +108,22 @@ func (s *Sequencer) tryToSendSequence(ctx context.Context, ticker *time.Ticker) 
 // If the array is empty, it doesn't necessarily mean that there are no sequences to be sent,
 // it could be that it's not worth it to do so yet.
 func (s *Sequencer) getSequencesToSend(ctx context.Context) ([]types.Sequence, error) {
-	lastVirtualBatchNum, err := s.state.GetLastVirtualBatchNum(ctx, nil)
+	lastBatchNum, err := s.state.GetLastVirtualBatchNum(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last virtual batch num, err: %w", err)
 	}
+	id, err := s.ethTxManager.GetLatestMinedTxId(ctx, ethTxManagerOwner, ethtxmanager.MonitoredTxStatusDone, nil)
+	if err == nil && strings.Contains(id, "sequence-from") {
+		items := strings.Split(id, "-")
+		if len(items) == 5 {
+			lastSendBatch, err := strconv.ParseUint(items[4], 10, 64)
+			if err == nil && lastBatchNum < lastSendBatch {
+				lastBatchNum = lastSendBatch
+			}
+		}
+	}
+	currentBatchNumToSequence := lastBatchNum + 1
 
-	currentBatchNumToSequence := lastVirtualBatchNum + 1
 	sequences := []types.Sequence{}
 	// var estimatedGas uint64
 
