@@ -14,7 +14,6 @@ import (
 	"github.com/0xPolygonHermez/zkevm-node/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v4"
 )
@@ -434,25 +433,25 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 				err := c.etherman.SendTx(ctx, signedTx)
 				if err != nil {
 					mTxLog.Errorf("failed to send tx %v to network: %v", signedTx.Hash().String(), err)
-					if err.Error() == core.ErrNonceTooLow.Error() {
-						mTxLog.Infof("nonce needs to be updated")
-						err := c.ReviewMonitoredTxNonce(ctx, &mTx)
-						if err != nil {
-							mTxLog.Errorf("failed to review monitored tx nonce: %v", err)
-							continue
-						}
-						err = c.storage.Update(ctx, mTx, nil)
-						if err != nil {
-							mTxLog.Errorf("failed to update monitored tx nonce change: %v", err)
-							continue
-						}
-						// 	mTx.status = MonitoredTxStatusFailed
-						// 	err = c.storage.Update(ctx, mTx, nil)
-						// 	if err != nil {
-						// 		mTxLog.Errorf("failed to update monitored tx nonce change: %v", err)
-						// 		continue
-						// 	}
-					}
+					//if err.Error() == core.ErrNonceTooLow.Error() {
+					//	mTxLog.Infof("nonce needs to be updated")
+					//	err := c.ReviewMonitoredTxNonce(ctx, &mTx)
+					//	if err != nil {
+					//		mTxLog.Errorf("failed to review monitored tx nonce: %v", err)
+					//		continue
+					//	}
+					//	err = c.storage.Update(ctx, mTx, nil)
+					//	if err != nil {
+					//		mTxLog.Errorf("failed to update monitored tx nonce change: %v", err)
+					//		continue
+					//	}
+					//	// 	mTx.status = MonitoredTxStatusFailed
+					//	// 	err = c.storage.Update(ctx, mTx, nil)
+					//	// 	if err != nil {
+					//	// 		mTxLog.Errorf("failed to update monitored tx nonce change: %v", err)
+					//	// 		continue
+					//	// 	}
+					//}
 
 					continue
 				}
@@ -706,4 +705,8 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, owner string, r
 			}
 		}
 	}
+}
+
+func (c *Client) GetLatestMinedTxId(ctx context.Context, owner string, status MonitoredTxStatus, dbTx pgx.Tx) (string, error) {
+	return c.storage.GetLatestMinedTxId(ctx, &owner, status, dbTx)
 }

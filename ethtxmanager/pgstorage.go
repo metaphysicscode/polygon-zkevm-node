@@ -99,6 +99,20 @@ func (s *PostgresStorage) GetFinalTx(ctx context.Context, id string, dbTx pgx.Tx
 	return mTx, nil
 }
 
+func (s *PostgresStorage) GetLatestMinedTxId(ctx context.Context, owner *string, status MonitoredTxStatus, dbTx pgx.Tx) (string, error) {
+	conn := s.dbConn(dbTx)
+	cmd := `SELECT  id  FROM state.monitored_txs WHERE owner = $1 AND status = $2 ORDER BY block_num DESC LIMIT 1`
+	var id string
+	row := conn.QueryRow(ctx, cmd, owner, status)
+	err := row.Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return id, ErrNotFound
+	} else if err != nil {
+		return id, err
+	}
+	return id, nil
+}
+
 // GetByStatus loads all monitored tx that match the provided status
 func (s *PostgresStorage) GetByStatus(ctx context.Context, owner *string, statuses []MonitoredTxStatus, dbTx pgx.Tx) ([]monitoredTx, error) {
 	hasStatusToFilter := len(statuses) > 0

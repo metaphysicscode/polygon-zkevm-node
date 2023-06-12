@@ -153,4 +153,5 @@ type ethTxManager interface {
 	Result(ctx context.Context, owner, id string, dbTx pgx.Tx) (ethtxmanager.MonitoredTxResult, error)
 	ResultsByStatus(ctx context.Context, owner string, statuses []ethtxmanager.MonitoredTxStatus, dbTx pgx.Tx) ([]ethtxmanager.MonitoredTxResult, error)
 	ProcessPendingMonitoredTxs(ctx context.Context, owner string, failedResultHandler ethtxmanager.ResultHandler, dbTx pgx.Tx)
+	GetLatestMinedTxId(ctx context.Context, owner string, status ethtxmanager.MonitoredTxStatus, dbTx pgx.Tx) (string, error)
 }

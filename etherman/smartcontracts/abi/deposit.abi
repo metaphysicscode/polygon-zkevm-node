@@ -164,7 +164,12 @@
       "outputs": [
         {
           "internalType": "uint256",
-          "name": "",
+          "name": "expect",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "real",
           "type": "uint256"
         }
       ],
@@ -181,7 +186,7 @@
     {
       "inputs": [
         {
-          "internalType": "address",
+          "internalType": "contract ISlotAdapter",
           "name": "_slotAdapter",
           "type": "address"
         }
@@ -192,19 +197,13 @@
       "type": "function"
     },
     {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "name": "slotAdapters",
+      "inputs": [],
+      "name": "slotAdapter",
       "outputs": [
         {
-          "internalType": "bool",
+          "internalType": "contract ISlotAdapter",
           "name": "",
-          "type": "bool"
+          "type": "address"
         }
       ],
       "stateMutability": "view",

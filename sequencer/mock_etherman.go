@@ -4,6 +4,8 @@ package sequencer
 
 import (
 	context "context"
+	"github.com/0xPolygonHermez/zkevm-node/ethtxmanager"
+	"github.com/jackc/pgx/v4"
 
 	common "github.com/ethereum/go-ethereum/common"
 
@@ -201,6 +203,32 @@ func (_m *EthermanMock) TrustedSequencer() (common.Address, error) {
 
 	return r0, r1
 }
+
+
+// GetLatestMinedTxId provides a mock function with given fields: ctx, owner, status, dbTx
+func (_m *EthermanMock) GetLatestMinedTxId(ctx context.Context, owner string, status ethtxmanager.MonitoredTxStatus, dbTx pgx.Tx) (string, error) {
+	ret := _m.Called(ctx, owner, status, dbTx)
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, ethtxmanager.MonitoredTxStatus, pgx.Tx) (string, error)); ok {
+		return rf(ctx, owner, status, dbTx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, ethtxmanager.MonitoredTxStatus, pgx.Tx) string); ok {
+		r0 = rf(ctx, owner, status, dbTx)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, ethtxmanager.MonitoredTxStatus, pgx.Tx) error); ok {
+		r1 = rf(ctx, owner, status, dbTx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 
 type mockConstructorTestingTNewEthermanMock interface {
 	mock.TestingT
