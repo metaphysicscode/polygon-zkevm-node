@@ -114,6 +114,7 @@ func (s *Sequencer) getSequencesToSend(ctx context.Context) ([]types.Sequence, e
 	}
 	id, err := s.ethTxManager.GetLatestMinedTxId(ctx, ethTxManagerOwner, ethtxmanager.MonitoredTxStatusDone, nil)
 	if err == nil && strings.Contains(id, "sequence-from") {
+		log.Debugf("get sequence tx. id: %s", id)
 		items := strings.Split(id, "-")
 		if len(items) == 5 {
 			lastSendBatch, err := strconv.ParseUint(items[4], 10, 64)
@@ -121,6 +122,8 @@ func (s *Sequencer) getSequencesToSend(ctx context.Context) ([]types.Sequence, e
 				lastBatchNum = lastSendBatch
 			}
 		}
+	} else {
+		log.Warnf("failed to get latest mined txId. err: %v. lastBatchNum: %d", err, lastBatchNum)
 	}
 	currentBatchNumToSequence := lastBatchNum + 1
 
