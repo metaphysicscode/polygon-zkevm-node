@@ -2574,3 +2574,38 @@ func (p *PostgresStorage) GetTxBlockNum(ctx context.Context, id string, dbTx pgx
 
 	return blockNumber, status, nil
 }
+
+// GetLastProofSubmission queries the latest submitted proof's monitor id from monitor table
+func (p *PostgresStorage) GetLastProofSubmission(ctx context.Context, dbTx pgx.Tx) (string, error) {
+	conn := p.getExecQuerier(dbTx)
+	cmd := `SELECT id FROM state.monitored_txs WHERE id like 'proof-from%' ORDER BY created_at DESC limit 1`
+
+	var monitorID string
+
+	err := conn.QueryRow(ctx, cmd).Scan(&monitorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return monitorID, ErrNotFound
+	} else if err != nil {
+		return monitorID, err
+	}
+
+	return monitorID, nil
+}
+
+func (p *PostgresStorage) HaveMonitoredTxById(ctx context.Context, monitoredID string, dbTx pgx.Tx) (bool, error) {
+	var num int
+	cmd := `SELECT count(1) FROM state.monitored_txs where id = $1 and status = 'sent'`
+
+	e := p.getExecQuerier(dbTx)
+	err := e.QueryRow(ctx, cmd, monitoredID).Scan(&num)
+
+	if err != nil {
+		return false, err
+	}
+
+	if num == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}

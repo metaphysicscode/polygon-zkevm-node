@@ -82,4 +82,6 @@ type stateInterface interface {
 	GetTxBlockNum(ctx context.Context, id string, dbTx pgx.Tx) (uint64, string, error)
 	HaveProverProofByBatchNum(ctx context.Context, batchNumberFinal uint64, dbTx pgx.Tx) (bool, error)
 	IsGenerateProofHash(ctx context.Context, sender string, batchNumber uint64, dbTx pgx.Tx) (bool, error)
+	GetLastProofSubmission(ctx context.Context, dbTx pgx.Tx) (string, error)
+	HaveMonitoredTxById(ctx context.Context, monitoredID string, dbTx pgx.Tx) (bool, error)
 }
